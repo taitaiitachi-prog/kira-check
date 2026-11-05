@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T17:56:35.366Z">
+<meta name="kc-build" content="2026-11-05T18:01:14.959Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -112,6 +112,8 @@ input.cos:disabled { opacity: .5; }
 /* 進化の系統の行（押すと開く）。開いている間は、系統の行と中の絵の行を同じ地の色にして1かたまりに見せる */
 .vrow.grp { cursor: pointer; }
 .vrow.grp.open, .vrow.sub { background: var(--panel); }
+/* 中の絵の行は右へずらす（写真の大きさは変えない。大きい文字の段組みの余白より強くするため #list から書く） */
+#list .vrow.sub { padding-left: calc(12px + var(--thw) / 3); }
 #sh-pic { cursor: pointer; }
 
 /* 取り込みの行（1匹1行）：上の段に絵・ニックネームの写真・♂♀・スキップ、下の段に候補の絵（か新しい絵の種族と衣装） */
