@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T05:02:06.919Z">
+<meta name="kc-build" content="2026-11-05T05:06:28.942Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -159,11 +159,10 @@ input.cos:disabled { opacity: .5; }
 /* 絵は幅いっぱいに大きく（衣装の違いを見るため）。× は絵に重ねず上に置く */
 .sheet-top { display: flex; justify-content: center; position: relative; padding: 48px 12px 0; }
 /* 小さい絵と同じく、ポケモンのいる真ん中下を拡大して見せる */
-/* 下の入力欄が画面に収まるよう、写真は見えている高さの 36% まで。入力中はさらに小さく */
-.sheet-top .pic { display: block; width: min(100%, calc(var(--vh, 100vh) * 0.48)); aspect-ratio: 4 / 3; overflow: hidden; border-radius: 10px; background: #222529; }
-#zoom .sheet-top .pic { width: min(100%, calc((var(--vh, 100vh) - 90px) * 4 / 3)); }
-.sheet.typing .sheet-top .pic { width: calc(var(--thw) * 1.4); }
-.sheet-top .pic img { width: 100%; height: 100%; display: block; transform: scale(1.4); transform-origin: 50% 72%; }
+/* 下の入力欄が画面に収まるよう、写真は見えている高さの 36% まで */
+/* 基準は svh（キーボードが出ても変わらない画面の高さ）。入力中も写真の大きさは変えない */
+.sheet-top .pic { display: block; width: min(100%, 48vh); width: min(100%, 48svh); aspect-ratio: 4 / 3; overflow: hidden; border-radius: 10px; background: #222529; }
+#zoom .sheet-top .pic { width: min(100%, calc((var(--vh, 100vh) - 90px) * 4 / 3)); }.sheet-top .pic img { width: 100%; height: 100%; display: block; transform: scale(1.4); transform-origin: 50% 72%; }
 .sheet .x { position: absolute; right: 6px; top: 4px; width: 44px; height: 44px; border: 0; background: none; color: var(--sub); font-size: 26px; }
 .sh-counts { padding: 8px 0 0; }
 .cnt-row { display: flex; align-items: center; gap: 8px; padding: 4px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -768,10 +767,9 @@ KC.ui = (() => {
     window.addEventListener('scroll', fit);
     // 一覧の中の入力欄に入ったら、その行を一覧の上の方へ動かす（下に候補とキーボードの場所を空ける）
     document.addEventListener('focusin', e => {
-      // 大きく見る画面の入力欄：入力中は写真を縮め、欄が見える所まで動かす
+      // 大きく見る画面の入力欄：欄が見える所まで動かす（写真の大きさは変えない）
       const sh = e.target.closest('input') && e.target.closest('.sheet');
       if (sh) {
-        sh.classList.add('typing');
         const go = () => e.target.scrollIntoView({ block: 'nearest' });
         go();
         setTimeout(go, 350);   // キーボードが出終わってからもう一度
@@ -786,8 +784,6 @@ KC.ui = (() => {
       setTimeout(go, 350);   // キーボードが出終わってからもう一度
     });
     document.addEventListener('focusout', e => {
-      const sh = e.target.closest('.sheet');
-      if (sh) setTimeout(() => { if (!sh.contains(document.activeElement)) sh.classList.remove('typing'); }, 150);
       const box = e.target.closest('.scroll');
       if (box) setTimeout(() => { if (!box.contains(document.activeElement)) box.classList.remove('typing'); }, 150);
     });
