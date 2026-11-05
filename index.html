@@ -2,11 +2,11 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T07:42:58.738Z">
+<meta name="kc-build" content="2026-11-05T08:05:27.687Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
-/* 落ち着いたダーク。色は意味のある所だけ（1人目＝青・2人目＝ばら色、新しい＝金） */
+/* 落ち着いたダーク。色は意味のある所だけ（名前の文字：1人目＝青・2人目＝ばら色。新しい＝金） */
 :root {
   --bg: #15171a; --panel: #1d2024; --line: #2c3036; --text: #e6e8eb; --sub: #8d949c;
   --on: #5fc9a8; --off: #4a5058; --gold: #d9b45a; --err: #e07a6e;
@@ -57,41 +57,31 @@ input[type=search]::-webkit-search-cancel-button { filter: invert(.7); }
 .seg button { height: calc(var(--h) - 2px); min-width: 52px; max-width: calc(var(--fs) * 6.4); padding: 0 10px; background: none; border: 0; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.on { background: var(--panel); color: var(--text); }
-/* 2人の色：取り込みで選んでいる人はボタンを塗る。一覧の絞り込みは文字と下線 */
-#who button.on.pa, #me button.on.pa { background: var(--pa); color: var(--bg); font-weight: 600; }
-#who button.on.pb, #me button.on.pb { background: var(--pb); color: var(--bg); font-weight: 600; }
-#filter button.on.pa { color: var(--pa); box-shadow: inset 0 -2px var(--pa); }
-#filter button.on.pb { color: var(--pb); box-shadow: inset 0 -2px var(--pb); }
-#page-scan[data-who=a] #add { background: var(--pa); border-color: var(--pa); }
-#page-scan[data-who=b] #add { background: var(--pb); border-color: var(--pb); }
-#page-scan[data-who=a] .step b { color: var(--pa); }
-#page-scan[data-who=b] .step b { color: var(--pb); }
+/* 2人の色は名前の文字だけに使う（ボタン・数・バーは色を付けない）。
+   名前を選ぶボタン（誰のスクショ・この端末・絞り込み）は、選んでいる方の名前を色文字＋下線にする */
+#who button.on.pa, #me button.on.pa, #filter button.on.pa { color: var(--pa); box-shadow: inset 0 -2px var(--pa); font-weight: 600; }
+#who button.on.pb, #me button.on.pb, #filter button.on.pb { color: var(--pb); box-shadow: inset 0 -2px var(--pb); font-weight: 600; }
 .done .pa, .cnt-row .pa { color: var(--pa); }
 .done .pb, .cnt-row .pb { color: var(--pb); }
 /* 上の段（誰のスクショ・検索・名前）は横幅に収まるよう、文字は 16px まで */
 .page > .bar { font-size: min(var(--fs), 16px); }
 .page > .bar input { font-size: 16px; }
 .page > .bar .seg button { max-width: 96px; }
-/* 設定：名前の下に、その人の大きさのバー */
+/* 設定：上に2人の名前と保存、下に「この端末の人」と、その人の大きさのバー（1本） */
 .bar.people { display: grid; grid-template-columns: 1fr 1fr auto; }
-input.size { height: var(--h); padding: 0; border: 0; background: none; }
-input.size.pa-c { accent-color: var(--pa); }
-input.size.pb-c { accent-color: var(--pb); }
+.size-row { grid-column: 1 / -1; display: flex; gap: 12px; align-items: center; }
+input.size { flex: 1; height: var(--h); padding: 0; border: 0; background: none; accent-color: var(--text); }
 
 /* 数の −／＋ */
 .step { display: inline-flex; align-items: center; height: var(--h); border: 1px solid var(--line); border-radius: 8px; flex: none; }
 .step button { width: var(--stb); height: 100%; background: none; border: 0; font-size: 1.2em; cursor: pointer; }
 .step button:disabled { opacity: .3; cursor: default; }
 .step b { min-width: 1.3em; text-align: center; }
-.had { color: var(--sub); font-size: .85em; white-space: nowrap; }
-/* オスメスの ♂／♀（大きく見る画面の数の左）。付いている方はその人の色で塗りつぶす（取り込みの人のボタンと同じ見せ方）。
-   付いていない方は暗い記号だけ */
+/* オスメスの ♂／♀（大きく見る画面の数の左）。付いている方は白で塗りつぶし、付いていない方は暗い記号だけ */
 .sex { display: inline-flex; height: var(--h); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
 .sex button { width: calc(var(--stb) + 8px); height: 100%; background: none; border: 0; color: var(--off); font-size: 1.1em; cursor: pointer; }
 .sex button + button { border-left: 1px solid var(--line); }
-.sex button.on { color: var(--bg); font-weight: 700; }
-.cnt-row[data-p=a] .sex button.on { background: var(--pa); }
-.cnt-row[data-p=b] .sex button.on { background: var(--pb); }
+.sex button.on { background: var(--text); color: var(--bg); font-weight: 700; }
 .sex button:disabled { opacity: .3; cursor: default; }
 /* 一覧の印：数の横に小さく ♂♀ */
 .mk small { font-size: .6em; font-weight: 400; margin-left: 2px; }
@@ -103,32 +93,47 @@ input.size.pb-c { accent-color: var(--pb); }
 .vhead .mkh.pa { color: var(--pa); }
 .vhead .mkh.pb { color: var(--pb); }
 .vrow { height: var(--row); border-bottom: 1px solid var(--line); }
-.vrow .nm, .srow .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vrow .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nm small { font-size: .85em; color: var(--sub); margin-left: 6px; }
 /* 衣装名の欄（種族の右） */
 input.cos { flex: none; width: var(--cos-w); padding: 0 8px; }
 input.cos:disabled { opacity: .5; }
-.nmcell { display: flex; gap: 6px; min-width: 0; }
-.nmcell .picker { flex: 1; }
 /* 絵の枠。切り抜きは背景の玉が多いので、ポケモンのいる真ん中下を拡大して見せる */
 .th { width: var(--thw); height: var(--thh); border-radius: 6px; overflow: hidden; background: #222529; display: block; cursor: pointer; flex: none; }
 .th img { width: 100%; height: 100%; display: block; transform: scale(1.4); transform-origin: 50% 72%; }
 .th.sm { width: var(--smw); height: var(--smh); border-radius: 4px; }
 .vhead .th { visibility: hidden; height: 0; }
 .mk { height: var(--row); border: 0; background: none; font-size: 1.33em; color: var(--off); cursor: pointer; white-space: nowrap; overflow: hidden; padding: 0; }
-.mk.on { font-weight: 700; }
-.mk.on[data-p=a] { color: var(--pa); }
-.mk.on[data-p=b] { color: var(--pb); }
+.mk.on { font-weight: 700; color: var(--text); }
 .mk:disabled { cursor: default; opacity: .5; }
 .vrow.none .nm { color: var(--sub); }
 
-/* 取り込みの確認の行：絵・種族（衣装）・済の数・入れる数。ふつうの大きさは1行 */
-.srow { display: grid; grid-template-columns: var(--thw) 1fr auto auto; align-items: center; gap: 4px 6px; padding: 0 12px; height: var(--row); border-bottom: 1px solid var(--line); }
-/* 大きいとき（2段目から）は2段：上に種族（衣装）、下に済の数と −／＋ */
-:root[data-big] .srow { grid-template-columns: var(--thw) 1fr auto; height: auto; padding: 8px 12px; }
+/* 取り込みの行（1匹1行）：上の段に絵・ニックネームの写真・♂♀・スキップ、下の段に候補の絵（か新しい絵の種族と衣装） */
+.srow { display: grid; grid-template-columns: var(--thw) minmax(0, 1fr) auto auto; grid-template-rows: var(--h) var(--h); align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.srow .th { grid-row: 1 / 3; }
+.srow .nick { min-width: 0; height: var(--h); display: flex; align-items: center; overflow: hidden; }
+.srow .nick img { max-width: 100%; max-height: 100%; display: block; border-radius: 4px; }
+.skip-b { height: var(--h); padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--sub); white-space: nowrap; cursor: pointer; }
+.skip-b.on { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+.srow.skip .th, .srow.skip .nick, .srow.skip .pick, .srow.skip .sex { opacity: .35; }
+/* 下の段：候補は横に並べ、多ければ横に動かす（折り返さない） */
+.pick { grid-column: 2 / 5; display: flex; gap: 6px; align-items: center; min-width: 0; height: var(--h); overflow-x: auto; overflow-y: hidden; }
+.pick { scrollbar-width: none; }
+.pick::-webkit-scrollbar { display: none; }
+.pick.new { overflow: visible; }
+.pick .picker { flex: 1; }
+.tile { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 100%; padding: 0 10px 0 2px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--sub); white-space: nowrap; cursor: pointer; }
+.tile .th.sm { width: calc((var(--h) - 6px) * 4 / 3); height: calc(var(--h) - 6px); }
+.tile.on { border: 2px solid var(--text); color: var(--text); font-weight: 600; }
+.tile.new { padding: 0 10px; }
+.pick .back { flex: none; width: var(--h); height: var(--h); border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--sub); font-size: 1.3em; cursor: pointer; }
+/* 大きいとき（2段目から）は3段：絵とニックネーム／♂♀とスキップ（右寄せ）／候補 */
+:root[data-big] .srow { grid-template-rows: auto var(--h) var(--h); }
 :root[data-big] .srow .th { grid-row: 1 / 3; }
-:root[data-big] .srow .nm, :root[data-big] .srow .nmcell { grid-column: 2 / 4; }
-:root[data-big] .srow .had { grid-column: 2; justify-self: end; }
+:root[data-big] .srow .nick { grid-column: 2 / 5; }
+:root[data-big] .srow .sex { grid-row: 2; grid-column: 3; }
+:root[data-big] .srow .skip-b { grid-row: 2; grid-column: 4; }
+:root[data-big] .srow .pick { grid-row: 3; grid-column: 1 / 5; }
 /* 一覧も2段：上に名前（衣装）、下に2人の印（見出しの列に合わせる） */
 :root[data-big] .vrow { grid-template-rows: auto auto; height: auto; padding: 6px 12px; }
 :root[data-big] .vrow .th { grid-row: 1 / 3; }
@@ -136,7 +141,6 @@ input.cos:disabled { opacity: .5; }
 :root[data-big] .vrow .mk { grid-row: 2; height: var(--h); }
 :root[data-big] .vrow .mk:first-of-type { grid-column: 3; }
 :root[data-big] .vrow .mk:last-of-type { grid-column: 4; }
-.srow.off .th, .srow.off .nm { opacity: .4; }
 .btn.disabled, .seg.disabled { opacity: .35; pointer-events: none; }
 /* 「誰のスクショ？」：右の名前を押すと写真選びが開く */
 .who-q { flex: none; color: var(--sub); white-space: nowrap; }
@@ -226,16 +230,17 @@ input.cos:disabled { opacity: .5; }
 
   <!-- 設定 -->
   <section class="page" id="page-settings">
-    <!-- 名前の下に、その人の文字と写真の大きさ（10段階） -->
+    <!-- 上に2人の名前、下に「この端末を使う人」と、その人の文字と写真の大きさ（10段階・1本） -->
     <div class="bar people">
       <input id="name-a" maxlength="12" placeholder="1人目" title="1人目の名前">
       <input id="name-b" maxlength="12" placeholder="2人目" title="2人目の名前">
       <button class="btn main" id="save-names">保存</button>
-      <input id="size-a" class="size pa-c" type="range" min="0" max="9" step="1" value="0" title="1人目の文字と写真の大きさ">
-      <input id="size-b" class="size pb-c" type="range" min="0" max="9" step="1" value="0" title="2人目の文字と写真の大きさ">
-      <div class="seg" id="me" title="この端末を使う人（その人の大きさで見せる）">
-        <button data-p="a" class="pa">A</button>
-        <button data-p="b" class="pb">B</button>
+      <div class="size-row">
+        <div class="seg" id="me" title="この端末を使う人（その人の大きさで見せる）">
+          <button data-p="a" class="pa">A</button>
+          <button data-p="b" class="pb">B</button>
+        </div>
+        <input id="size" class="size" type="range" min="0" max="9" step="1" value="0" title="この端末の人の文字と写真の大きさ">
       </div>
     </div>
     <div class="scroll" id="log"></div>
@@ -897,7 +902,7 @@ KC.ui = (() => {
     document.querySelectorAll('.pb').forEach(el => { el.textContent = el.closest('#filter') ? b + '×' : b; el.title = b; });
     if (document.activeElement !== $('name-a')) $('name-a').value = a;
     if (document.activeElement !== $('name-b')) $('name-b').value = b;
-    ['a', 'b'].forEach((p, i) => { if (document.activeElement !== $('size-' + p)) $('size-' + p).value = S().sizes[i]; });
+    paintMe();
     applySize();
   }
   const pname = p => S().people[p === 'a' ? 0 : 1];
@@ -975,6 +980,13 @@ KC.ui = (() => {
     return { get: () => sel, set };
   }
 
+  // オスメスの記号（︎：iPhone などで絵文字の形にしないための印）と、印 'm'|'f'|'mf' をそろえる
+  const SYM = { m: '♂︎', f: '♀︎' };
+  const gNorm = s => (s.includes('m') ? 'm' : '') + (s.includes('f') ? 'f' : '');
+  // ♂／♀ のボタン2つ（押したときの処理は使う側で button[data-g] を拾う）
+  const sexHtml = (g, off) => ['m', 'f'].map(x =>
+    `<button data-g="${x}"${g.includes(x) ? ' class="on"' : ''}${off ? ' disabled' : ''} title="${x === 'm' ? 'オス' : 'メス'}のキラ">${SYM[x]}</button>`).join('');
+
   // 数の −／＋（押したときの処理は使う側で button[data-d] を拾う）
   const stepHtml = (n, tip = '') => `<span class="step"${tip ? ` title="${esc(tip)}"` : ''}><button data-d="-1"${n ? '' : ' disabled'}>−</button><b>${n}</b><button data-d="1">＋</button></span>`;
 
@@ -991,7 +1003,11 @@ KC.ui = (() => {
   // まだ選んでいない端末は、前の版で使っていた「誰のスクショ？」の人
   let me = 'a';
   try { me = (localStorage.getItem(ME_KEY) || localStorage.getItem('kc-who')) === 'b' ? 'b' : 'a'; } catch { /* 覚えられなければ1人目 */ }
-  function paintMe() { $('me').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.p === me)); }
+  // 選んでいる人と、バーをその人の大きさにする（バーを動かしている最中は触らない）
+  function paintMe() {
+    $('me').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.p === me));
+    if (document.activeElement !== $('size')) $('size').value = S().sizes[me === 'b' ? 1 : 0];
+  }
   function applySize(k) {
     if (k == null) k = S().sizes[me === 'b' ? 1 : 0];
     k = Math.min(9, Math.max(0, Math.floor(+k) || 0));
@@ -1015,17 +1031,15 @@ KC.ui = (() => {
       applySize();
       note(`この端末：${pname(before)}→${pname(me)}`);
     });
-    // バーを動かしている間はその場で見せ、離したら保存（前→今を帯に出す）
-    ['a', 'b'].forEach(p => {
-      const el = $('size-' + p);
-      el.addEventListener('input', () => { if (me === p) applySize(el.value); });
-      el.addEventListener('change', () => {
-        const k = +el.value, before = S().sizes[p === 'a' ? 0 : 1];
-        if (k === before) return;
-        KC.api.setSize(p, k);
-        applySize();
-        note(`${pname(p)}：大きさ ${before + 1}→${k + 1}`);
-      });
+    // バー（この端末の人の大きさ）：動かしている間はその場で見せ、離したら保存（前→今を帯に出す）
+    const el = $('size');
+    el.addEventListener('input', () => applySize(el.value));
+    el.addEventListener('change', () => {
+      const p = me, k = +el.value, before = S().sizes[p === 'a' ? 0 : 1];
+      if (k === before) return;
+      KC.api.setSize(p, k);
+      applySize();
+      note(`${pname(p)}：大きさ ${before + 1}→${k + 1}`);
     });
     $('zoom').addEventListener('click', () => { $('zoom').hidden = true; });
     $('save-names').addEventListener('click', () => {
@@ -1060,7 +1074,7 @@ KC.ui = (() => {
     });
   }
 
-  return { $, esc, name, label, pname, note, fail, busy, fillImages, picker, stepHtml, zoom, applySize, refresh, boot };
+  return { $, esc, name, label, pname, note, fail, busy, fillImages, picker, SYM, gNorm, sexHtml, stepHtml, zoom, applySize, refresh, boot };
 })();
 
 // 一覧の画面（検索もここ）と、絵をたっぷり見る画面（種族を直す・同じ絵をまとめる）
@@ -1072,9 +1086,8 @@ KC.list = (() => {
 
   // 印：持っていない ×・持っていれば数（1・2・3…）
   const mkText = n => n ? String(n) : '×';
-  // オスメスの記号（︎：iPhone などで絵文字の形にしないための印）
-  const SYM = { m: '♂︎', f: '♀︎' };
-  const gSym = g => (g.includes('m') ? SYM.m : '') + (g.includes('f') ? SYM.f : '');
+  // オスメスの記号（記号は ui.js の SYM）
+  const gSym = g => (g.includes('m') ? U().SYM.m : '') + (g.includes('f') ? U().SYM.f : '');
   const gText = g => gSym(g) || '−';
   // 印の数の横に、記録したオスメスを小さく出す
   const mkHtml = (v, p) => {
@@ -1124,7 +1137,6 @@ KC.list = (() => {
     KC.api.count(p, vid, n);
     paintRow(vid);
     if (cur === vid) paintCounts();
-    KC.scanUi.render();
     note(`${pname(p)}：${label(v)} ${before > 1 || n > 1 ? `${before}→${n}` : `${mkText(before)}→${mkText(n)}`}`);
   }
   // 印のタップ：押すたびに1匹増える（×→1→2→3…）。減らすのは大きく見る画面の −
@@ -1135,8 +1147,7 @@ KC.list = (() => {
     const { note, label, pname } = U();
     const v = S().variants.get(vid), before = KC.api.gender(p, vid);
     if (!v || !KC.api.have(p, vid)) return;
-    const s = before.includes(x) ? before.replace(x, '') : before + x;
-    const g = (s.includes('m') ? 'm' : '') + (s.includes('f') ? 'f' : '');
+    const g = U().gNorm(before.includes(x) ? before.replace(x, '') : before + x);
     KC.api.setGender(p, vid, g);
     paintRow(vid);
     if (cur === vid) paintCounts();
@@ -1146,11 +1157,10 @@ KC.list = (() => {
   // 絵をたっぷり見る画面：2人ごとに名前・オスメス・数の −／＋
   let cur = null, pick = null;
   function paintCounts() {
-    const { $, esc, pname, stepHtml } = U();
+    const { $, esc, pname, stepHtml, sexHtml } = U();
     $('sh-counts').innerHTML = ['a', 'b'].map(p => {
-      const n = KC.api.have(p, cur), g = KC.api.gender(p, cur);
-      const sex = ['m', 'f'].map(x => `<button data-g="${x}"${g.includes(x) ? ' class="on"' : ''}${n ? '' : ' disabled'} title="${x === 'm' ? 'オス' : 'メス'}のキラを持っている">${SYM[x]}</button>`).join('');
-      return `<div class="cnt-row" data-p="${p}"><span class="p${p} grow">${esc(pname(p))}</span><span class="sex">${sex}</span>${stepHtml(n)}</div>`;
+      const n = KC.api.have(p, cur);
+      return `<div class="cnt-row" data-p="${p}"><span class="p${p} grow">${esc(pname(p))}</span><span class="sex">${sexHtml(KC.api.gender(p, cur), !n)}</span>${stepHtml(n)}</div>`;
     }).join('');
   }
   function open(vid) {
@@ -1231,17 +1241,20 @@ KC.list = (() => {
   return { init, render, open };
 })();
 
-// 取り込みの画面：スクショを読む → 台帳の絵と見比べる → 確認の表 → 追加
+// 取り込みの画面：スクショのキラを1匹1行に並べる → 各行で台帳の絵（候補）か新しい絵を選ぶ・スキップ・♂♀ → 追加
+// 絵の見比べ（軽い・粗い）は候補を似ている順に並べるだけに使う。似た絵が1つだけのときだけ最初から選んでおく
+//（冠の色違いなど、絵では見分けられない衣装があるため。わからないときは決めず、ニックネームの写真を見て選んでもらう）
 window.KC = window.KC || {};
 KC.scanUi = (() => {
   const U = () => KC.ui;
   const S = () => KC.api.state;
-  // 選んでいる人。端末に覚える（この端末を使う人。文字の大きさもこの人のものになる）
+  // 選んでいる人。端末に覚える
   let who = 'a';
   try { if (localStorage.getItem('kc-who') === 'b') who = 'b'; } catch { /* 覚えられなければ1人目 */ }
-  // 読んだキラの絵（同じ絵は1つ）：{dataUrl, feat, vid, nameCanvas, cand:{vids,nos}, sel, seen, n}
-  // seen：スクショ1枚に同じ絵が何匹写っていたか（何枚かあれば多い方。重なって写るので足さない）
-  // n：入れる数（はじめは seen。−／＋で直す。0 なら入れない）
+  // 1匹1行：{dataUrl（絵）, feat, nameUrl（ニックネームの所の写真）, nameCanvas, shot（何枚目のスクショ）,
+  //   cands:[{vid}|{ref:前の行}]（似ている順）, nos:[種族の候補], sel:{vid}|{no}|{ref}|null, cos, mode:'cands'|'new',
+  //   skip, touched（スキップを自分で押した）, g（'m'|'f'|'mf'|''）}
+  // ref：今回読んだ前の行の「新しい絵」と同じ絵、の意味
   let entries = [];
   let done = null;    // 最後の追加：{who, before, after, added}（before・after は全部で何匹）
   let running = false;
@@ -1254,10 +1267,37 @@ KC.scanUi = (() => {
   }
   const prog = r => { U().$('progress').firstElementChild.style.width = Math.round(r * 100) + '%'; };
 
+  // 行が指している絵：{vid}（台帳の絵）か {root}（今回の新しい絵の元の行）。決まっていなければ null
+  function resolve(e) {
+    let x = e, s = e.sel;
+    while (s && s.ref) { x = s.ref; s = x.sel; }
+    if (!s) return null;
+    return s.vid ? { vid: s.vid } : { root: x };
+  }
+  const ready = e => !e.skip && !!resolve(e);
+  // 候補の種族（台帳の絵と、前の行の新しい絵の種族）
+  const candNos = e => [...new Set(e.cands.map(c => {
+    if (c.vid) return S().variants.get(c.vid)?.no;
+    const r = resolve(c.ref);
+    return r && (r.vid ? S().variants.get(r.vid)?.no : r.root.sel.no);
+  }).filter(Boolean))];
+
+  // もう記録してある絵を最初からスキップにする（その人が、スクショ1枚に写っている数以上を持っているとき）。
+  // 自分でスキップを押した行は変えない
+  function applyDefaults() {
+    const per = new Map();   // 'スクショ番号|絵の id' → 行の数
+    entries.forEach(e => { const r = resolve(e); if (r && r.vid) per.set(e.shot + '|' + r.vid, (per.get(e.shot + '|' + r.vid) || 0) + 1); });
+    entries.forEach(e => {
+      if (e.touched) return;
+      const r = resolve(e);
+      e.skip = !!(r && r.vid && KC.api.have(who, r.vid) >= per.get(e.shot + '|' + r.vid));
+    });
+  }
+
   async function read(files) {
     const { $ } = U();
     running = true;
-    entries = [];   // 選び直したら、前に読んだ分は捨てる（数を数え直すため）
+    entries = [];   // 選び直したら、前に読んだ分は捨てる
     done = null;
     $('add').disabled = true;
     $('who').classList.add('disabled');
@@ -1268,43 +1308,46 @@ KC.scanUi = (() => {
       await KC.api.fetchImages(ids);
       const known = [];
       for (const id of ids) { const f = await KC.api.feature(id); if (f) known.push([id, f]); }
-      const fresh = [];
       for (let k = 0; k < files.length; k++) {
         const cells = (await KC.scan.readImage(files[k])).filter(c => c.lucky);
-        const inShot = new Map();   // この1枚に、その絵が何匹写っているか
         for (const c of cells) {
           // Google のシートは1マス5万文字まで。超えそうなら画質を下げる
           let dataUrl = c.canvas.toDataURL('image/jpeg', 0.85);
           if (dataUrl.length > 45000) dataUrl = c.canvas.toDataURL('image/jpeg', 0.6);
           const feat = await featOf(dataUrl);
-          const ds = known.map(([id, f]) => [id, KC.scan.distance(feat, f)]).sort((a, b) => a[1] - b[1]);
-          let e;
-          if (ds.length && ds[0][1] < KC.scan.SAME) {
-            const vid = ds[0][0];
-            e = entries.find(x => x.vid === vid);
-            if (!e) entries.push(e = { dataUrl: KC.api.img(vid), vid, seen: 0 });
-          } else {
-            // 台帳にない絵。今回読んだ中に同じ絵があれば1つにする
-            e = entries.find(x => !x.vid && x.feat && KC.scan.distance(feat, x.feat) < KC.scan.SAME);
-            if (!e) {
-              const near = ds.filter(d => d[1] < KC.scan.NEAR).slice(0, 4).map(d => d[0]);
-              entries.push(e = { dataUrl, feat, vid: null, nameCanvas: c.nameCanvas, cand: { vids: near, nos: [] }, sel: null, seen: 0 });
-              fresh.push(e);
-            }
+          const { distance, SAME, NEAR } = KC.scan;
+          // 似ている順の候補：台帳の絵と、今回の前の行で新しい絵の欄を出した行（＝その絵の1匹目。同じ絵が何個も並ばないように）
+          const all = [
+            ...known.map(([vid, f]) => ({ vid, d: distance(feat, f) })),
+            ...entries.filter(x => x.mode === 'new').map(x => ({ ref: x, d: distance(feat, x.feat) })),
+          ].filter(x => x.d < NEAR).sort((a, b) => a.d - b.d);
+          const same = all.filter(x => x.d < SAME);
+          const e = {
+            dataUrl, feat, nameCanvas: c.nameCanvas, nameUrl: c.nameCanvas.toDataURL('image/jpeg', 0.8), shot: k,
+            cands: all.slice(0, 8).map(x => x.vid ? { vid: x.vid } : { ref: x.ref }), nos: [],
+            sel: null, cos: '', skip: false, touched: false, g: '', pre: false,
+          };
+          // 似た絵が台帳の絵1つだけのときは、それを選んでおく（候補に衣装名が出るので、ニックネームと見比べて直せる）。
+          // 2つ以上あるとき・今回の前の行に似ているとき（候補は「新」としか出ず、色違いの衣装に吸い寄せられやすい）は決めない
+          if (same.length === 1 && same[0].vid) {
+            e.sel = { vid: same[0].vid };
+            e.pre = true;
           }
-          inShot.set(e, (inShot.get(e) || 0) + 1);
+          // ほぼ同じ絵があれば候補から選ぶ形、無ければ新しい絵の欄（種族・衣装）。‹／「新しい絵」で切り替えられる
+          e.mode = same.length ? 'cands' : 'new';
+          entries.push(e);
         }
-        inShot.forEach((n, e) => { e.seen = Math.max(e.seen, n); e.n = e.seen; });
         prog(0.1 + 0.6 * (k + 1) / files.length);
+        applyDefaults();
         render();
       }
-      // 台帳にない絵だけ、名前の文字を読んで種族の候補を出す（ヒント）
+      // 候補が無い行（台帳にも今回にも似た絵が無い）だけ、名前の文字を読んで種族の候補を出す（ヒント。重いので要る行だけ）
+      const fresh = entries.filter(e => e.mode === 'new');
       if (fresh.length) {
         const texts = await KC.ocr.readAll(fresh.map(e => e.nameCanvas), (i, n) => prog(0.7 + 0.3 * i / n));
         fresh.forEach((e, i) => {
           const g = KC.ocr.guessEx(texts[i]);
-          const nearNos = e.cand.vids.map(id => S().variants.get(id)?.no).filter(Boolean);
-          e.cand.nos = [...new Set([...g.ids, ...nearNos])];
+          e.nos = g.ids;
           // 名前がそのまま読めて1つに決まったときだけ、最初から入れておく
           if (g.sure && !e.sel) e.sel = { no: g.ids[0] };
         });
@@ -1320,82 +1363,111 @@ KC.scanUi = (() => {
     }
   }
 
-  // 今その人が持っている数（台帳の絵を選んだ行は、その絵の数）
-  const base = e => { const id = e.vid || (e.sel && e.sel.vid); return id ? KC.api.have(who, id) : 0; };
-  // 出す行：持っている数より多く写っていた絵だけ
-  const visible = () => entries.filter(e => !(e.vid && KC.api.have(who, e.vid) >= e.seen));
-  const ready = e => !!(e.vid || e.sel) && e.n > base(e);
-  function updateAdd() { U().$('add').disabled = running || !visible().some(ready); }
+  function updateAdd() { U().$('add').disabled = running || !entries.some(ready); }
+
+  // 候補の絵を並べる（押して選ぶ・もう一度押すと外す）。最後に「新しい絵」
+  function candsHtml(e) {
+    const { esc, name } = U();
+    const on = c => e.sel && (c.vid ? e.sel.vid === c.vid : e.sel.ref === c.ref) ? ' on' : '';
+    return e.cands.map((c, j) => {
+      if (c.vid) {
+        const v = S().variants.get(c.vid);
+        return v ? `<button class="tile${on(c)}" data-j="${j}"><span class="th sm"><img data-vid="${esc(c.vid)}" alt=""></span>${esc(v.cos || name(v.no))}</button>` : '';
+      }
+      return `<button class="tile${on(c)}" data-j="${j}" title="この取り込みの新しい絵"><span class="th sm"><img src="${c.ref.dataUrl}" alt=""></span>新</button>`;
+    }).join('') + '<button class="tile new" data-new>新しい絵</button>';
+  }
+  function rowHtml(e, i) {
+    const { sexHtml } = U();
+    const pick = e.mode === 'new'
+      ? `${e.cands.length ? '<button class="back" title="候補から選ぶ">‹</button>' : ''}<div class="picker"></div><input class="cos" type="text" maxlength="12" placeholder="衣装" autocomplete="off">`
+      : candsHtml(e);
+    return `<div class="srow${e.skip ? ' skip' : ''}" data-i="${i}"><span class="th"><img src="${e.dataUrl}" alt=""></span>` +
+      `<span class="nick"><img src="${e.nameUrl}" alt=""></span><span class="sex">${sexHtml(e.g)}</span>` +
+      `<button class="skip-b${e.skip ? ' on' : ''}" title="入れない（もう一度押すと戻す）">スキップ</button>` +
+      `<div class="pick${e.mode === 'new' ? ' new' : ''}">${pick}</div></div>`;
+  }
+  // 新しい絵の行：種族を選ぶ欄と衣装名の欄をつなぐ（台帳の絵を選んだら、その絵の衣装名を出して押せなくする）
+  function mount(row, e) {
+    U().fillImages(row);
+    const host = row.querySelector('.picker');
+    if (!host) return;
+    const cos = row.querySelector('.cos');
+    const syncCos = () => {
+      const v = e.sel && e.sel.vid && S().variants.get(e.sel.vid);
+      cos.disabled = !!v;
+      cos.value = v ? v.cos : (e.cos || '');
+    };
+    cos.addEventListener('input', () => { e.cos = cos.value; });
+    U().picker(host, {
+      value: e.sel && !e.sel.ref ? e.sel : null,
+      cands: () => [...e.cands.filter(c => c.vid && S().variants.get(c.vid)).map(c => ({ vid: c.vid, no: S().variants.get(c.vid).no })),
+        ...[...new Set([...e.nos, ...candNos(e)])].map(no => ({ no }))],
+      onChange: s => {
+        e.sel = s ? (s.vid ? { vid: s.vid } : { no: s.no }) : null;
+        syncCos();
+        updateAdd();
+      },
+    });
+    syncCos();
+  }
+  function paintRow(i) {
+    const old = U().$('scan-list').querySelector(`.srow[data-i="${i}"]`);
+    if (!old) return;
+    const t = document.createElement('div');
+    t.innerHTML = rowHtml(entries[i], i);
+    const row = t.firstElementChild;
+    old.replaceWith(row);
+    mount(row, entries[i]);
+    updateAdd();
+  }
 
   function render() {
-    const { $, esc, name, pname, picker, stepHtml } = U();
+    const { $, esc, pname } = U();
     $('who').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.p === who));
-    $('page-scan').dataset.who = who;   // 選んでいる人の色にする
     const list = $('scan-list');
     let html = '';
     if (done) {
       html += `<div class="done"><div class="cnt"><span class="p${done.who}">${esc(pname(done.who))}</span><b>${done.before} → ${done.after}</b></div>` +
         `<div class="thumbs">${done.added.map(id => `<span class="th sm"><img data-vid="${esc(id)}" alt=""></span>`).join('')}</div></div>`;
     }
-    const vis = visible();
-    if (entries.length && !vis.length && !running) html += '<div class="done">増えたキラはありません</div>';
-    // 行：絵（押すと大きく）・名前（台帳にない絵は種族と衣装の欄）・持っている数（済）・入れる数の −／＋
-    html += vis.map((e, i) => {
-      const v = e.vid && S().variants.get(e.vid), had = base(e);
-      return `<div class="srow${ready(e) ? '' : ' off'}" data-i="${i}"><span class="th"><img src="${e.dataUrl}" alt=""></span>` +
-        (v ? `<span class="nm">${esc(name(v.no))}${v.cos ? `<small>${esc(v.cos)}</small>` : ''}</span>`
-          : '<div class="nmcell"><div class="picker"></div><input class="cos" type="text" maxlength="12" placeholder="衣装" autocomplete="off"></div>') +
-        `<span class="had" title="もう記録してある数">${had ? '済' + had : ''}</span>${stepHtml(e.n, 'このスクショで数えた数')}</div>`;
-    }).join('');
+    html += entries.map(rowHtml).join('');
     list.innerHTML = html;
     U().fillImages(list);
-    // 台帳にない絵：種族を選ぶ欄と、衣装名の欄（台帳の絵を選んだら、その絵の衣装名を出して押せなくする）
-    list.querySelectorAll('.srow').forEach(row => {
-      const e = vis[+row.dataset.i], host = row.querySelector('.picker');
-      if (!host) return;
-      const cos = row.querySelector('.cos');
-      const syncCos = () => {
-        const v = e.sel && e.sel.vid && S().variants.get(e.sel.vid);
-        cos.disabled = !!v;
-        cos.value = v ? v.cos : (e.cos || '');
-      };
-      cos.addEventListener('input', () => { e.cos = cos.value; });
-      picker(host, {
-        value: e.sel,
-        cands: () => [...e.cand.vids.map(id => ({ vid: id, no: S().variants.get(id)?.no })).filter(c => c.no), ...e.cand.nos.map(no => ({ no }))],
-        onChange: s => {
-          e.sel = s;
-          paintRow(row, e);
-          syncCos();
-          updateAdd();
-        },
-      });
-      syncCos();
-    });
+    list.querySelectorAll('.srow').forEach(row => mount(row, entries[+row.dataset.i]));
     updateAdd();
   }
-  // 1行だけ描き直す（入れるか・済の数・−／＋の数）
-  function paintRow(row, e) {
-    const had = base(e);
-    row.classList.toggle('off', !ready(e));
-    row.querySelector('.had').textContent = had ? '済' + had : '';
-    row.querySelector('.step b').textContent = e.n;
-    row.querySelector('.step [data-d="-1"]').disabled = !e.n;
-  }
 
-  // 追加：画面はすぐ変え、保存は裏で送る（新しい絵はこの端末にも覚える）
+  // 追加：絵ごとに、スクショ1枚の中で選んだ行の数を数え、何枚かあれば多い方（重なって写るので足さない）。
+  // 画面はすぐ変え、保存は裏で送る。♂♀ は付けた印を足す（外さない）
   function add() {
-    const { note, pname } = U();
-    const p = who, rows = visible().filter(ready);
+    const { note, pname, gNorm } = U();
+    const p = who, rows = entries.filter(ready);
     if (!rows.length) return;
-    const items = rows.map(e => e.vid ? { vid: e.vid, n: e.n } : e.sel.vid ? { vid: e.sel.vid, n: e.n } : { no: e.sel.no, img: e.dataUrl, cos: e.cos, n: e.n });
-    const before = KC.api.total(p);
-    const r = KC.api.add(p, items);
-    rows.forEach((e, i) => {
-      e.vid = r.ids[i];
-      e.dataUrl = KC.api.img(e.vid) || e.dataUrl;
+    const groups = new Map();   // 絵の id か元の行 → {r, per（スクショごとの行の数）, g}
+    rows.forEach(e => {
+      const r = resolve(e), key = r.vid || r.root;
+      let gp = groups.get(key);
+      if (!gp) groups.set(key, gp = { r, per: new Map(), g: '' });
+      gp.per.set(e.shot, (gp.per.get(e.shot) || 0) + 1);
+      gp.g += e.g;
     });
-    done = { who: p, before, after: KC.api.total(p), added: r.added };
+    const list = [...groups.values()];
+    const items = list.map(({ r, per }) => {
+      const n = Math.max(...per.values());
+      return r.vid ? { vid: r.vid, n } : { no: r.root.sel.no, img: r.root.dataUrl, cos: r.root.cos, n };
+    });
+    const before = KC.api.total(p);
+    const res = KC.api.add(p, items);
+    list.forEach((gp, i) => {
+      const vid = res.ids[i];
+      if (gp.r.root) gp.r.root.sel = { vid };   // 残った行が、この新しい絵を指せるように
+      const cur = KC.api.gender(p, vid), g = gNorm(cur + gp.g);
+      if (g !== cur) KC.api.setGender(p, vid, g);
+    });
+    // 入れた行とスキップした行を消す（まだ決まっていない行は残す）
+    entries = entries.filter(e => !e.skip && !rows.includes(e));
+    done = { who: p, before, after: KC.api.total(p), added: res.added };
     U().refresh();
     note(`${pname(p)}：${before} → ${done.after}匹`);
   }
@@ -1408,7 +1480,7 @@ KC.scanUi = (() => {
       if (!b || running) return;
       who = b.dataset.p;
       try { localStorage.setItem('kc-who', who); } catch { /* その場だけ */ }
-      entries.forEach(x => { x.n = x.seen; });   // 入れる数は数えた数に戻す
+      applyDefaults();   // 持っている絵は人で違うので、スキップを選び直す
       render();
       $('files').click();
     });
@@ -1418,18 +1490,29 @@ KC.scanUi = (() => {
       if (fs.length && !running) await read(fs);
     });
     $('add').addEventListener('click', add);
-    // 絵を押すと大きく見る・−／＋で入れる数を直す
+    // 行の中：絵を押すと大きく・♂♀・スキップ・候補を選ぶ・新しい絵にする／候補に戻る
     $('scan-list').addEventListener('click', ev => {
       const row = ev.target.closest('.srow');
       if (!row) return;
-      const e = visible()[+row.dataset.i];
+      const i = +row.dataset.i, e = entries[i];
       if (!e) return;
-      if (ev.target.closest('.th')) { U().zoom(e.dataUrl); return; }
-      const b = ev.target.closest('.step button[data-d]');
-      if (!b) return;
-      e.n = Math.max(0, e.n + Number(b.dataset.d));
-      paintRow(row, e);
-      updateAdd();
+      if (ev.target.closest('.th') && !ev.target.closest('.tile')) { U().zoom(e.dataUrl); return; }
+      const b = ev.target.closest('button');
+      if (!b || b.disabled || b.closest('.picker')) return;
+      if (b.dataset.g) e.g = U().gNorm(e.g.includes(b.dataset.g) ? e.g.replace(b.dataset.g, '') : e.g + b.dataset.g);
+      else if (b.classList.contains('skip-b')) { e.skip = !e.skip; e.touched = true; }
+      else if (b.dataset.j != null) {
+        const c = e.cands[+b.dataset.j];
+        const same = e.sel && (c.vid ? e.sel.vid === c.vid : e.sel.ref === c.ref);
+        e.sel = same ? null : c.vid ? { vid: c.vid } : { ref: c.ref };
+      } else if (b.hasAttribute('data-new')) {
+        // 候補がみな同じ種族なら、その種族を入れておく（見た目がほぼ同じ絵なので）
+        const nos = candNos(e);
+        e.mode = 'new';
+        e.sel = nos.length === 1 ? { no: nos[0] } : null;
+      } else if (b.classList.contains('back')) { e.mode = 'cands'; e.sel = null; }
+      else return;
+      paintRow(i);
     });
   }
 
