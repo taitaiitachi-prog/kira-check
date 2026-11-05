@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T08:12:35.195Z">
+<meta name="kc-build" content="2026-11-05T09:14:41.794Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -747,15 +747,20 @@ KC.api = (() => {
   // 持っている数を直す（0 で持っていない）
   function count(p, vid, n) {
     n = Math.max(0, n);
-    if (n) state.owned[p].set(vid, n); else { state.owned[p].delete(vid); state.gender[p].delete(vid); }   // 0 にすると行ごと消える
+    if (n) state.owned[p].set(vid, n); else state.owned[p].delete(vid);
+    // 0 にすると行ごと消える。♂♀ 両方から1匹に減らしたら、どちらが残ったかわからないので空にする（Code.gs と同じ）
+    if (n < minOf(gender(p, vid))) state.gender[p].delete(vid);
     push('api_count', p, vid, n);
   }
   const have = (p, vid) => state.owned[p].get(vid) || 0;
   // オスメス（'m'|'f'|'mf'|''）。持っている絵だけ記録できる
   const gender = (p, vid) => state.gender[p].get(vid) || '';
+  // オスメスの印から決まる最低の数（♂♀ 両方なら2匹はいる。Code.gs の kcMin_ と同じ）
+  const minOf = g => g === 'mf' ? 2 : 1;
   function setGender(p, vid, g) {
     if (!have(p, vid)) return;
     if (g) state.gender[p].set(vid, g); else state.gender[p].delete(vid);
+    if (have(p, vid) < minOf(g)) state.owned[p].set(vid, minOf(g));   // Google 側も同じように増やす
     push('api_gender', p, vid, g);
   }
   const total = p => [...state.owned[p].values()].reduce((a, b) => a + b, 0);
@@ -775,6 +780,7 @@ KC.api = (() => {
       const g = gender(p, from) + gender(p, into);
       state.gender[p].delete(from);
       if (g) state.gender[p].set(into, (g.includes('m') ? 'm' : '') + (g.includes('f') ? 'f' : ''));
+      if (have(p, into) && have(p, into) < minOf(gender(p, into))) state.owned[p].set(into, 2);   // ♂♀ 両方になったら2匹以上
     });
     state.variants.delete(from);
     feats.delete(from);
@@ -1132,13 +1138,15 @@ KC.list = (() => {
   // 数を変える（戻せるので確認はしない）。画面はすぐ変え、保存は裏で送る
   function setCount(vid, p, n) {
     const { note, label, pname } = U();
-    const v = S().variants.get(vid), before = KC.api.have(p, vid);
+    const v = S().variants.get(vid), before = KC.api.have(p, vid), g0 = KC.api.gender(p, vid);
     n = Math.max(0, n);
     if (!v || n === before) return;
     KC.api.count(p, vid, n);
     paintRow(vid);
     if (cur === vid) paintCounts();
-    note(`${pname(p)}：${label(v)} ${before > 1 || n > 1 ? `${before}→${n}` : `${mkText(before)}→${mkText(n)}`}`);
+    // ♂♀ 両方から1匹に減らすと印が空になるので、それも出す
+    const g = KC.api.gender(p, vid), gNote = n && g !== g0 ? `・${gText(g0)}→${gText(g)}` : '';
+    note(`${pname(p)}：${label(v)} ${before > 1 || n > 1 ? `${before}→${n}` : `${mkText(before)}→${mkText(n)}`}${gNote}`);
   }
   // 印のタップ：押すたびに1匹増える（×→1→2→3…）。減らすのは大きく見る画面の −
   const tapMark = (vid, p) => setCount(vid, p, KC.api.have(p, vid) + 1);
@@ -1148,11 +1156,13 @@ KC.list = (() => {
     const { note, label, pname } = U();
     const v = S().variants.get(vid), before = KC.api.gender(p, vid);
     if (!v || !KC.api.have(p, vid)) return;
-    const g = U().gNorm(before.includes(x) ? before.replace(x, '') : before + x);
+    const g = U().gNorm(before.includes(x) ? before.replace(x, '') : before + x), n0 = KC.api.have(p, vid);
     KC.api.setGender(p, vid, g);
     paintRow(vid);
     if (cur === vid) paintCounts();
-    note(`${pname(p)}：${label(v)} ${gText(before)}→${gText(g)}`);
+    // ♂♀ 両方にすると2匹以上になるので、数が変わったらそれも出す
+    const n = KC.api.have(p, vid);
+    note(`${pname(p)}：${label(v)} ${gText(before)}→${gText(g)}${n !== n0 ? `・${n0}→${n}` : ''}`);
   }
 
   // 絵をたっぷり見る画面：2人ごとに名前・オスメス・数の −／＋
