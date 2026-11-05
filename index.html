@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T07:16:08.109Z">
+<meta name="kc-build" content="2026-11-05T07:37:26.274Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -84,6 +84,14 @@ input.size.pb-c { accent-color: var(--pb); }
 .step button:disabled { opacity: .3; cursor: default; }
 .step b { min-width: 1.3em; text-align: center; }
 .had { color: var(--sub); font-size: .85em; white-space: nowrap; }
+/* オスメスの ♂／♀（大きく見る画面の数の左）。2人の色とぶつかるので色は付けず、付いている方を明るく塗る */
+.sex { display: inline-flex; height: var(--h); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
+.sex button { width: calc(var(--stb) + 8px); height: 100%; background: none; border: 0; color: var(--off); font-size: 1.1em; cursor: pointer; }
+.sex button + button { border-left: 1px solid var(--line); }
+.sex button.on { background: var(--panel); color: var(--text); font-weight: 700; }
+.sex button:disabled { opacity: .3; cursor: default; }
+/* 一覧の印：数の横に小さく ♂♀ */
+.mk small { font-size: .6em; font-weight: 400; margin-left: 2px; }
 
 /* 絵の行：絵・名前・2人の印。1行に収める */
 .vhead, .vrow { display: grid; grid-template-columns: calc(var(--thw) + 4px) 1fr var(--mkw) var(--mkw); align-items: center; padding: 0 12px; gap: 4px; }
@@ -104,7 +112,7 @@ input.cos:disabled { opacity: .5; }
 .th img { width: 100%; height: 100%; display: block; transform: scale(1.4); transform-origin: 50% 72%; }
 .th.sm { width: var(--smw); height: var(--smh); border-radius: 4px; }
 .vhead .th { visibility: hidden; height: 0; }
-.mk { height: var(--row); border: 0; background: none; font-size: 1.33em; color: var(--off); cursor: pointer; }
+.mk { height: var(--row); border: 0; background: none; font-size: 1.33em; color: var(--off); cursor: pointer; white-space: nowrap; overflow: hidden; padding: 0; }
 .mk.on { font-weight: 700; }
 .mk.on[data-p=a] { color: var(--pa); }
 .mk.on[data-p=b] { color: var(--pb); }
@@ -535,8 +543,9 @@ KC.ocr = (() => {
 window.KC = window.KC || {};
 KC.api = (() => {
   // owned：人ごとの Map（絵の id → 持っている数）
+  // gender：人ごとの Map（絵の id → 'm'|'f'|'mf'。どちらのキラを持っているか。記録した絵だけ）
   // sizes：2人の文字の大きさ（0〜9）
-  const state = { people: ['A', 'B'], sizes: [0, 0], variants: new Map(), owned: { a: new Map(), b: new Map() }, log: [] };
+  const state = { people: ['A', 'B'], sizes: [0, 0], variants: new Map(), owned: { a: new Map(), b: new Map() }, gender: { a: new Map(), b: new Map() }, log: [] };
   const imgs = new Map();      // id → 絵（data URL）
   const feats = new Map();     // id → 見比べ用の特徴
 
@@ -588,7 +597,7 @@ KC.api = (() => {
 
   // 一覧・名前・持っている、の中身を1つの文字にする（Google の答えと手元が同じかを比べるため）
   const sig = () => JSON.stringify([state.people, state.sizes, [...state.variants.values()].map(v => [v.id, v.no, v.cos]).sort(),
-    [...state.owned.a].sort(), [...state.owned.b].sort()]);
+    [...state.owned.a].sort(), [...state.owned.b].sort(), [...state.gender.a].sort(), [...state.gender.b].sort()]);
   // Google の {id: 数}（前の版は id の並び）を Map にする
   const toMap = o => Array.isArray(o) ? new Map(o.map(id => [id, 1])) : new Map(Object.entries(o || {}));
   // Google の一覧で手元を置きかえる。返す値：記録以外が変わったか
@@ -598,6 +607,8 @@ KC.api = (() => {
     state.sizes = (m.sizes || [0, 0]).map(Number);
     state.variants = new Map(m.variants.map(([id, no, cos]) => [id, { id, no, cos: cos || '' }]));
     state.owned = { a: toMap(m.owned.a), b: toMap(m.owned.b) };
+    const g = m.gender || {};   // 前の版の Google には無い
+    state.gender = { a: new Map(Object.entries(g.a || {})), b: new Map(Object.entries(g.b || {})) };
     state.log = m.log;
     return sig() !== before;
   }
@@ -727,10 +738,17 @@ KC.api = (() => {
   // 持っている数を直す（0 で持っていない）
   function count(p, vid, n) {
     n = Math.max(0, n);
-    if (n) state.owned[p].set(vid, n); else state.owned[p].delete(vid);
+    if (n) state.owned[p].set(vid, n); else { state.owned[p].delete(vid); state.gender[p].delete(vid); }   // 0 にすると行ごと消える
     push('api_count', p, vid, n);
   }
   const have = (p, vid) => state.owned[p].get(vid) || 0;
+  // オスメス（'m'|'f'|'mf'|''）。持っている絵だけ記録できる
+  const gender = (p, vid) => state.gender[p].get(vid) || '';
+  function setGender(p, vid, g) {
+    if (!have(p, vid)) return;
+    if (g) state.gender[p].set(vid, g); else state.gender[p].delete(vid);
+    push('api_gender', p, vid, g);
+  }
   const total = p => [...state.owned[p].values()].reduce((a, b) => a + b, 0);
   function edit(vid, no, cos) {
     const v = state.variants.get(vid);
@@ -741,9 +759,13 @@ KC.api = (() => {
   }
   function merge(from, into) {
     // 両方持っていた人は多い方の数（Code.gs と同じ）
+    // オスメスは両方の印を合わせる
     ['a', 'b'].forEach(p => {
       const n = have(p, from);
       if (n && state.owned[p].delete(from)) state.owned[p].set(into, Math.max(n, have(p, into)));
+      const g = gender(p, from) + gender(p, into);
+      state.gender[p].delete(from);
+      if (g) state.gender[p].set(into, (g.includes('m') ? 'm' : '') + (g.includes('f') ? 'f' : ''));
     });
     state.variants.delete(from);
     feats.delete(from);
@@ -759,7 +781,7 @@ KC.api = (() => {
     push('api_size', p, k);
   }
 
-  return { state, hooks, load, isBusy, fetchImages, img, remember, feature, add, count, have, total, edit, merge, setPeople, setSize };
+  return { state, hooks, load, isBusy, fetchImages, img, remember, feature, add, count, have, gender, setGender, total, edit, merge, setPeople, setSize };
 })();
 
 // 画面の共通部分：タブ・下の帯（前→今・保存中）・種族を選ぶ欄・設定・起動
@@ -1047,7 +1069,15 @@ KC.list = (() => {
 
   // 印：持っていない ×・持っていれば数（1・2・3…）
   const mkText = n => n ? String(n) : '×';
-  const mkHtml = (v, p) => { const n = KC.api.have(p, v.id); return `<button class="mk${n ? ' on' : ''}" data-p="${p}">${mkText(n)}</button>`; };
+  // オスメスの記号（︎：iPhone などで絵文字の形にしないための印）
+  const SYM = { m: '♂︎', f: '♀︎' };
+  const gSym = g => (g.includes('m') ? SYM.m : '') + (g.includes('f') ? SYM.f : '');
+  const gText = g => gSym(g) || '−';
+  // 印の数の横に、記録したオスメスを小さく出す
+  const mkHtml = (v, p) => {
+    const n = KC.api.have(p, v.id), g = n ? gSym(KC.api.gender(p, v.id)) : '';
+    return `<button class="mk${n ? ' on' : ''}" data-p="${p}">${mkText(n)}${g ? `<small>${g}</small>` : ''}</button>`;
+  };
   function rowHtml(v) {
     const { esc, name } = U();
     return `<div class="vrow" data-vid="${esc(v.id)}"><span class="th"><img data-vid="${esc(v.id)}" alt=""></span>` +
@@ -1097,12 +1127,28 @@ KC.list = (() => {
   // 印のタップ：押すたびに1匹増える（×→1→2→3…）。減らすのは大きく見る画面の −
   const tapMark = (vid, p) => setCount(vid, p, KC.api.have(p, vid) + 1);
 
-  // 絵をたっぷり見る画面
+  // オスメスの印を切り替える（もう一度押すと外れる。持っていない人は押せない）
+  function toggleGender(vid, p, x) {
+    const { note, label, pname } = U();
+    const v = S().variants.get(vid), before = KC.api.gender(p, vid);
+    if (!v || !KC.api.have(p, vid)) return;
+    const s = before.includes(x) ? before.replace(x, '') : before + x;
+    const g = (s.includes('m') ? 'm' : '') + (s.includes('f') ? 'f' : '');
+    KC.api.setGender(p, vid, g);
+    paintRow(vid);
+    if (cur === vid) paintCounts();
+    note(`${pname(p)}：${label(v)} ${gText(before)}→${gText(g)}`);
+  }
+
+  // 絵をたっぷり見る画面：2人ごとに名前・オスメス・数の −／＋
   let cur = null, pick = null;
   function paintCounts() {
     const { $, esc, pname, stepHtml } = U();
-    $('sh-counts').innerHTML = ['a', 'b'].map(p =>
-      `<div class="cnt-row" data-p="${p}"><span class="p${p} grow">${esc(pname(p))}</span>${stepHtml(KC.api.have(p, cur))}</div>`).join('');
+    $('sh-counts').innerHTML = ['a', 'b'].map(p => {
+      const n = KC.api.have(p, cur), g = KC.api.gender(p, cur);
+      const sex = ['m', 'f'].map(x => `<button data-g="${x}"${g.includes(x) ? ' class="on"' : ''}${n ? '' : ' disabled'} title="${x === 'm' ? 'オス' : 'メス'}のキラを持っている">${SYM[x]}</button>`).join('');
+      return `<div class="cnt-row" data-p="${p}"><span class="p${p} grow">${esc(pname(p))}</span><span class="sex">${sex}</span>${stepHtml(n)}</div>`;
+    }).join('');
   }
   function open(vid) {
     const { $, esc, picker, fillImages } = U();
@@ -1161,11 +1207,13 @@ KC.list = (() => {
       note(txt);
     });
     // 2人の数の −／＋（押したらすぐ変わる）
+    // オスメスの ♂／♀（押すたびに付く・外れる）
     $('sh-counts').addEventListener('click', e => {
-      const b = e.target.closest('button[data-d]');
-      if (!b || !cur) return;
+      const b = e.target.closest('button[data-d],button[data-g]');
+      if (!b || !cur || b.disabled) return;
       const p = b.closest('.cnt-row').dataset.p;
-      setCount(cur, p, KC.api.have(p, cur) + Number(b.dataset.d));
+      if (b.dataset.g) toggleGender(cur, p, b.dataset.g);
+      else setCount(cur, p, KC.api.have(p, cur) + Number(b.dataset.d));
     });
     // まとめ先をタップで選ぶ（もう一度タップで外す）
     $('sh-merge').addEventListener('click', e => {
