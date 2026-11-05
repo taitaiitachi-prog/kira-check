@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T05:06:28.942Z">
+<meta name="kc-build" content="2026-11-05T05:10:10.602Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -1060,12 +1060,8 @@ KC.list = (() => {
     KC.scanUi.render();
     note(`${pname(p)}：${label(v)} ${before > 1 || n > 1 ? `${before}→${n}` : `${mkText(before)}→${mkText(n)}`}`);
   }
-  // 印のタップ：× と ○ を切り替える。2匹以上なら数を直せるよう大きく見る画面を開く（1回で数を消さない）
-  function toggle(vid, p) {
-    const n = KC.api.have(p, vid);
-    if (n > 1) open(vid);
-    else setCount(vid, p, n ? 0 : 1);
-  }
+  // 印のタップ：押すたびに1匹増える（×→○→2→3…）。減らすのは大きく見る画面の −
+  const tapMark = (vid, p) => setCount(vid, p, KC.api.have(p, vid) + 1);
 
   // 絵をたっぷり見る画面
   let cur = null, pick = null;
@@ -1106,7 +1102,7 @@ KC.list = (() => {
       const row = e.target.closest('.vrow[data-vid]');
       if (!row) return;
       const mk = e.target.closest('.mk');
-      if (mk && !mk.disabled) toggle(row.dataset.vid, mk.dataset.p);
+      if (mk && !mk.disabled) tapMark(row.dataset.vid, mk.dataset.p);
       else if (e.target.closest('.th')) open(row.dataset.vid);
     });
     $('sh-close').addEventListener('click', close);
