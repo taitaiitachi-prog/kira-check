@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T17:20:26.034Z">
+<meta name="kc-build" content="2026-11-05T17:32:48.996Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -190,6 +190,10 @@ input.cos:disabled { opacity: .5; }
 .sheet .x { position: absolute; right: 6px; top: 4px; width: 44px; height: 44px; border: 0; background: none; color: var(--sub); font-size: 26px; }
 .sh-counts { padding: 8px 0 0; }
 .cnt-row { display: flex; align-items: center; gap: 8px; padding: 4px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cnt-row .grow { overflow: hidden; text-overflow: ellipsis; }   /* 長い名前でもボタンに重ねない */
+/* 大きいとき（2段目から）は2段：上に名前、下に ♂♀・0・数（右寄せ） */
+:root[data-big] .cnt-row { flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; }
+:root[data-big] .cnt-row .grow { flex-basis: 100%; }
 /* まとめる候補は1行に並べ、多ければ横に動かす（折り返さない） */
 .sh-foot { display: flex; align-items: center; gap: 8px; padding-right: 12px; }
 /* 消す前の注意：画面の真ん中に小さく出す（大きく見る画面より上） */
@@ -768,19 +772,21 @@ KC.api = (() => {
     push('api_add', p, send);
     return { ids, added };
   }
-  // 持っている数を直す（0 で持っていない）
+  // 持っている数を直す（0 は「キラをまだ持っていない」と記録。負の数で記録を消して「?（まだ記入していない）」に戻す）
   function count(p, vid, n) {
-    n = Math.max(0, n);
-    if (n) state.owned[p].set(vid, n); else state.owned[p].delete(vid);
-    // 0 にすると行ごと消える。♂♀ 両方から1匹に減らしたら、どちらが残ったかわからないので空にする（Code.gs と同じ）
-    if (n < minOf(gender(p, vid))) state.gender[p].delete(vid);
+    n = Math.max(-1, n);
+    if (n >= 0) state.owned[p].set(vid, n); else state.owned[p].delete(vid);
+    // ♂♀ 両方から1匹に減らしたら、どちらが残ったかわからないので空にする。0 匹なら印も外れる（Code.gs と同じ）
+    if (n < minOf(gender(p, vid)) || n < 1) state.gender[p].delete(vid);
     push('api_count', p, vid, n);
   }
   const have = (p, vid) => state.owned[p].get(vid) || 0;
+  // 記入したか（0 匹も記入したうち。していなければ一覧は「?」）
+  const known = (p, vid) => state.owned[p].has(vid);
   // オスメス（'m'|'f'|'mf'|''）。持っている絵だけ記録できる
   const gender = (p, vid) => state.gender[p].get(vid) || '';
-  // オスメスの印から決まる最低の数（♂♀ 両方なら2匹はいる。Code.gs の kcMin_ と同じ）
-  const minOf = g => g === 'mf' ? 2 : 1;
+  // オスメスの印から決まる最低の数（♂♀ 両方なら2匹はいる。印が無ければ0もある。Code.gs の kcMin_ と同じ）
+  const minOf = g => g === 'mf' ? 2 : g ? 1 : 0;
   function setGender(p, vid, g) {
     if (!have(p, vid)) return;
     if (g) state.gender[p].set(vid, g); else state.gender[p].delete(vid);
@@ -803,14 +809,14 @@ KC.api = (() => {
     v.ord = k;
     push('api_order', vid, k);
   }
-  // 絵の並べ方（図鑑番号 → 並び順 → 登録した順）。一覧と、まとめる候補で使う
-  const cmp = (a, b) => a.no - b.no || a.ord - b.ord || (a.id < b.id ? -1 : 1);
+  // 絵の並べ方（図鑑番号 → 衣装なしが先 → 並び順 → 登録した順）。一覧と、まとめる候補で使う
+  const cmp = (a, b) => a.no - b.no || !!a.cos - !!b.cos || a.ord - b.ord || (a.id < b.id ? -1 : 1);
   function merge(from, into) {
     // 両方持っていた人は多い方の数（Code.gs と同じ）
     // オスメスは両方の印を合わせる
     ['a', 'b'].forEach(p => {
       const n = have(p, from);
-      if (n && state.owned[p].delete(from)) state.owned[p].set(into, Math.max(n, have(p, into)));
+      if (state.owned[p].delete(from)) state.owned[p].set(into, Math.max(n, have(p, into)));   // 0 匹の記録も移す
       const g = gender(p, from) + gender(p, into);
       state.gender[p].delete(from);
       if (g) state.gender[p].set(into, (g.includes('m') ? 'm' : '') + (g.includes('f') ? 'f' : ''));
@@ -837,7 +843,7 @@ KC.api = (() => {
     push('api_size', p, k);
   }
 
-  return { state, hooks, load, isBusy, fetchImages, img, remember, feature, add, count, have, gender, setGender, total, edit, order, cmp, merge, remove, setPeople, setSize };
+  return { state, hooks, load, isBusy, fetchImages, img, remember, feature, add, count, have, known, gender, setGender, total, edit, order, cmp, merge, remove, setPeople, setSize };
 })();
 
 // 画面の共通部分：タブ・下の帯（前→今・保存中）・種族を選ぶ欄・設定・起動
@@ -1035,8 +1041,8 @@ KC.ui = (() => {
   const sexHtml = (g, off) => ['m', 'f'].map(x =>
     `<button data-g="${x}"${g.includes(x) ? ' class="on"' : ''}${off ? ' disabled' : ''} title="${x === 'm' ? 'オス' : 'メス'}のキラ">${SYM[x]}</button>`).join('');
 
-  // 数の −／＋（押したときの処理は使う側で button[data-d] を拾う）
-  const stepHtml = (n, tip = '') => `<span class="step"${tip ? ` title="${esc(tip)}"` : ''}><button data-d="-1"${n ? '' : ' disabled'}>−</button><b>${n}</b><button data-d="1">＋</button></span>`;
+  // 数の −／＋（押したときの処理は使う側で button[data-d] を拾う）。txt は真ん中に出す文字（まだ記入していない「?」など）
+  const stepHtml = (n, tip = '', txt = n) => `<span class="step"${tip ? ` title="${esc(tip)}"` : ''}><button data-d="-1"${n ? '' : ' disabled'}>−</button><b>${esc(String(txt))}</b><button data-d="1">＋</button></span>`;
 
   // 写真だけを大きく見る（取り込みの表で使う。どこを押しても閉じる）
   function zoom(src) {
@@ -1132,15 +1138,16 @@ KC.list = (() => {
   const S = () => KC.api.state;
   let filter = 'all';
 
-  // 印：持っていない ×・持っていれば数（1・2・3…）
-  const mkText = n => n ? String(n) : '×';
+  // 印・数の文字：まだ記入していない ?（数は -1 で表す）・持っていないと記録した 0・持っていれば 1・2・3…
+  const mkText = n => n < 0 ? '?' : String(n);
+  const cntOf = (p, vid) => KC.api.known(p, vid) ? KC.api.have(p, vid) : -1;
   // オスメスの記号（記号は ui.js の SYM）
   const gSym = g => (g.includes('m') ? U().SYM.m : '') + (g.includes('f') ? U().SYM.f : '');
   const gText = g => gSym(g) || '−';
   // 印の数の横に、記録したオスメスを小さく出す（♂♀ 両方そろっていれば出さない）
   const mkHtml = (v, p) => {
-    const n = KC.api.have(p, v.id), g0 = KC.api.gender(p, v.id), g = n && g0 !== 'mf' ? gSym(g0) : '';
-    return `<button class="mk${n ? ' on' : ''}" data-p="${p}">${mkText(n)}${g ? `<small>${g}</small>` : ''}</button>`;
+    const n = cntOf(p, v.id), g0 = KC.api.gender(p, v.id), g = n > 0 && g0 !== 'mf' ? gSym(g0) : '';
+    return `<button class="mk${n > 0 ? ' on' : ''}" data-p="${p}">${mkText(n)}${g ? `<small>${g}</small>` : ''}</button>`;
   };
   function rowHtml(v) {
     const { esc, name } = U();
@@ -1152,17 +1159,17 @@ KC.list = (() => {
     const { $, esc, name, fillImages } = U();
     const q = $('q').value.trim();
     const hitNos = q ? new Set(KC.ocr.search(q, 60)) : null;
-    const o = S().owned;
+    // 絞り込み「A×」は、その人が持っていない絵（? と 0）
     const vs = [...S().variants.values()]
       .filter(v => !hitNos || hitNos.has(v.no) || (v.cos && v.cos.includes(q)))
-      .filter(v => filter === 'all' || !o[filter].has(v.id))
+      .filter(v => filter === 'all' || !KC.api.have(filter, v.id))
       .sort(KC.api.cmp);
     let html = vs.map(rowHtml).join('');
     // 検索した種族で、台帳に絵がないもの（まだ誰もキラを持っていない）
     if (hitNos && filter === 'all') {
       const has = new Set(vs.map(v => v.no));
       html += [...hitNos].filter(no => !has.has(no)).slice(0, 20)
-        .map(no => `<div class="vrow none"><span class="th"></span><span class="nm">${esc(name(no))}</span><button class="mk" disabled>×</button><button class="mk" disabled>×</button></div>`).join('');
+        .map(no => `<div class="vrow none"><span class="th"></span><span class="nm">${esc(name(no))}</span><button class="mk" disabled>?</button><button class="mk" disabled>?</button></div>`).join('');
     }
     $('list').innerHTML = html;
     fillImages($('list'));
@@ -1172,24 +1179,24 @@ KC.list = (() => {
   function paintRow(vid) {
     const row = U().$('list').querySelector(`.vrow[data-vid="${CSS.escape(vid)}"]`), v = S().variants.get(vid);
     if (!row || !v) return;
-    if (filter !== 'all' && S().owned[filter].has(vid)) { row.remove(); return; }   // 絞り込みの外になった
+    if (filter !== 'all' && KC.api.have(filter, vid)) { row.remove(); return; }   // 絞り込みの外になった
     row.querySelectorAll('.mk').forEach(b => { b.outerHTML = mkHtml(v, b.dataset.p); });
   }
 
-  // 数を変える（戻せるので確認はしない）。画面はすぐ変え、保存は裏で送る
+  // 数を変える（戻せるので確認はしない）。画面はすぐ変え、保存は裏で送る。-1 で「?（まだ記入していない）」に戻す
   function setCount(vid, p, n) {
     const { note, label, pname } = U();
-    const v = S().variants.get(vid), before = KC.api.have(p, vid), g0 = KC.api.gender(p, vid);
-    n = Math.max(0, n);
+    const v = S().variants.get(vid), before = cntOf(p, vid), g0 = KC.api.gender(p, vid);
+    n = Math.max(-1, n);
     if (!v || n === before) return;
     KC.api.count(p, vid, n);
     paintRow(vid);
     if (cur === vid) paintCounts();
-    // ♂♀ 両方から1匹に減らすと印が空になるので、それも出す
-    const g = KC.api.gender(p, vid), gNote = n && g !== g0 ? `・${gText(g0)}→${gText(g)}` : '';
-    note(`${pname(p)}：${label(v)} ${before > 1 || n > 1 ? `${before}→${n}` : `${mkText(before)}→${mkText(n)}`}${gNote}`);
+    // ♂♀ 両方から1匹に減らす・0 にすると印が変わるので、それも出す
+    const g = KC.api.gender(p, vid), gNote = g !== g0 ? `・${gText(g0)}→${gText(g)}` : '';
+    note(`${pname(p)}：${label(v)} ${mkText(before)}→${mkText(n)}${gNote}`);
   }
-  // 印のタップ：押すたびに1匹増える（×→1→2→3…）。減らすのは大きく見る画面の −
+  // 印のタップ：押すたびに1匹増える（?→1→2→3…。0 からも 1）。減らすのは大きく見る画面の −
   const tapMark = (vid, p) => setCount(vid, p, KC.api.have(p, vid) + 1);
 
   // オスメスの印を切り替える（もう一度押すと外れる。持っていない人は押せない）
@@ -1206,13 +1213,15 @@ KC.list = (() => {
     note(`${pname(p)}：${label(v)} ${gText(before)}→${gText(g)}${n !== n0 ? `・${n0}→${n}` : ''}`);
   }
 
-  // 絵をたっぷり見る画面：2人ごとに名前・オスメス・数の −／＋
+  // 絵をたっぷり見る画面：2人ごとに名前・オスメス・0（持っていない）・数の −／＋
+  // 0 のボタンは押すと 0、もう一度押すと ?（まだ記入していない）に戻る。− は 0 まで
   let cur = null, pick = null;
   function paintCounts() {
     const { $, esc, pname, stepHtml, sexHtml } = U();
     $('sh-counts').innerHTML = ['a', 'b'].map(p => {
-      const n = KC.api.have(p, cur);
-      return `<div class="cnt-row" data-p="${p}"><span class="p${p} grow">${esc(pname(p))}</span><span class="sex">${sexHtml(KC.api.gender(p, cur), !n)}</span>${stepHtml(n)}</div>`;
+      const n = cntOf(p, cur), h = Math.max(0, n);
+      const zero = `<span class="sex"><button data-z="1"${n === 0 ? ' class="on"' : ''} title="キラをまだ持っていない（もう一度押すと ? に戻る）">0</button></span>`;
+      return `<div class="cnt-row" data-p="${p}"><span class="p${p} grow">${esc(pname(p))}</span><span class="sex">${sexHtml(KC.api.gender(p, cur), !h)}</span>${zero}${stepHtml(h, '', mkText(n))}</div>`;
     }).join('');
   }
   // 衣装違いの並び順（写真の左上）。−／＋ のほか、真ん中の数字は打ち込める（0〜99）
@@ -1299,11 +1308,13 @@ KC.list = (() => {
     });
     // 2人の数の −／＋（押したらすぐ変わる）
     // オスメスの ♂／♀（押すたびに付く・外れる）
+    // 0（押すと 0、0 のときにもう一度押すと ?）
     $('sh-counts').addEventListener('click', e => {
-      const b = e.target.closest('button[data-d],button[data-g]');
+      const b = e.target.closest('button[data-d],button[data-g],button[data-z]');
       if (!b || !cur || b.disabled) return;
       const p = b.closest('.cnt-row').dataset.p;
-      if (b.dataset.g) toggleGender(cur, p, b.dataset.g);
+      if (b.dataset.z) setCount(cur, p, cntOf(p, cur) === 0 ? -1 : 0);
+      else if (b.dataset.g) toggleGender(cur, p, b.dataset.g);
       else setCount(cur, p, KC.api.have(p, cur) + Number(b.dataset.d));
     });
     // 並び順の −／＋
