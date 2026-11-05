@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T17:32:48.996Z">
+<meta name="kc-build" content="2026-11-05T17:39:19.084Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -177,7 +177,9 @@ input.cos:disabled { opacity: .5; }
 .sheet-top { display: flex; justify-content: center; position: relative; padding: calc(var(--h) + 8px) 12px 0; }
 #zoom .sheet-top { padding-top: 48px; }
 #sheet .x { top: calc(4px + (var(--h) - 44px) / 2); }   /* × は並び順の −／＋ と高さの真ん中をそろえる */
-.sh-ord { position: absolute; left: 12px; top: 4px; display: inline-flex; align-items: center; gap: 6px; }
+/* 左上：消す・並び順の −／＋ */
+.sh-tl { position: absolute; left: 12px; top: 4px; display: inline-flex; align-items: center; gap: 12px; }
+.sh-ord { display: inline-flex; align-items: center; gap: 6px; }
 .sh-ord small { color: var(--sub); font-size: .85em; }
 /* 並び順の数字の欄（2けたが入る幅で固定。iPhone が拡大しないよう文字は 16px 以上） */
 .sh-ord .step input { width: 2.2em; height: 100%; padding: 0; border: 0; border-radius: 0; background: none; text-align: center; font-weight: 700; }
@@ -203,7 +205,8 @@ input.cos:disabled { opacity: .5; }
 .sh-merge { display: flex; gap: 6px; align-items: center; padding: 0 12px; min-height: 46px; color: var(--sub); font-size: .85em; white-space: nowrap; overflow-x: auto; }
 .sh-merge > * { flex: none; }
 .sh-merge img { width: calc(var(--smw) + 8px); height: calc(var(--smh) + 6px); border-radius: 5px; cursor: pointer; border: 2px solid var(--line); }
-.sh-merge img.sel { border-color: var(--on); }
+/* 選んだ小さい絵は上の絵にまとまって消えるので、白い枠で薄く見せる */
+.sh-merge img.sel { border-color: var(--text); opacity: .4; }
 
 </style>
 </head>
@@ -271,11 +274,11 @@ input.cos:disabled { opacity: .5; }
 <div class="sheet" id="sheet" hidden>
   <div class="sheet-in">
     <!-- 左上にこの絵の並び順（同じ種族の衣装違いの中で）、右上に閉じる -->
-    <div class="sheet-top"><span class="sh-ord" id="sh-ord" title="並び順：同じ種族の衣装違いは、一覧で小さい順に並ぶ"></span><span class="pic"><img id="sh-img" alt=""></span><button class="x" id="sh-close" title="閉じる">×</button></div>
+    <div class="sheet-top"><span class="sh-tl"><button class="btn" id="sh-del" title="この絵を台帳から消す">消す</button><span class="sh-ord" id="sh-ord" title="並び順：同じ種族の衣装違いは、一覧で小さい順に並ぶ"></span></span><span class="pic"><img id="sh-img" alt=""></span><button class="x" id="sh-close" title="閉じる">×</button></div>
     <div class="sh-counts" id="sh-counts" title="持っている数"></div>
     <div class="bar"><div class="picker grow" id="sh-picker"></div><input class="cos" id="sh-cos" type="text" maxlength="12" placeholder="衣装" autocomplete="off"><button class="btn main" id="sh-save">保存</button></div>
     <!-- 左に「同じ絵としてまとめる」、右端に「消す」（押すと注意の小窓） -->
-    <div class="sh-foot"><div class="sh-merge grow" id="sh-merge"></div><button class="btn" id="sh-del" title="この絵を台帳から消す">消す</button></div>
+    <div class="sh-foot"><div class="sh-merge grow" id="sh-merge"></div></div>
   </div>
 </div>
 
@@ -1261,7 +1264,7 @@ KC.list = (() => {
     paintOrd();
     const others = [...S().variants.values()].filter(x => x.no === v.no && x.id !== vid).sort(KC.api.cmp);
     $('sh-merge').innerHTML = others.length
-      ? '<span>同じ絵としてまとめる</span>' + others.map(x => `<img data-vid="${esc(x.id)}" data-into="${esc(x.id)}" alt="" title="この絵にまとめる">`).join('')
+      ? '<span>上の絵にまとめる</span>' + others.map(x => `<img data-vid="${esc(x.id)}" data-from="${esc(x.id)}" alt="" title="この絵を上の絵にまとめる（この絵は消え、数とオスメスは上の絵に入る）">`).join('')
       : '';
     fillImages($('sh-merge'));
     $('sheet').hidden = false;
@@ -1269,7 +1272,7 @@ KC.list = (() => {
   const close = () => { U().$('sheet').hidden = true; cur = null; };
 
   function init() {
-    const { $, note, name, label } = U();
+    const { $, note, label } = U();
     $('q').addEventListener('input', render);
     $('filter').addEventListener('click', e => {
       const b = e.target.closest('button[data-f]');
@@ -1289,20 +1292,19 @@ KC.list = (() => {
     $('sheet').addEventListener('click', e => { if (e.target === $('sheet')) close(); });
     $('sh-save').addEventListener('click', () => {
       const vid = cur, s = pick && pick.get(), v = S().variants.get(vid);
-      const into = $('sh-merge').querySelector('img.sel');
-      if (v && into) {
-        // まとめると元の絵は台帳から消えるので戻せない（タップで選んで保存、の2段階にしている）
-        close();
-        KC.api.merge(vid, into.dataset.into);
-        U().refresh();
-        note(`${name(v.no)}：絵を1つまとめました`);
-        return;
-      }
+      // まとめる：大きく見ている絵を残し、下で選んだ小さい絵をそこへまとめる
+      // 小さい絵は台帳から消えるので戻せない（タップで選んで保存、の2段階にしている）
+      const sel = $('sh-merge').querySelector('img.sel');
+      const from = sel && S().variants.get(sel.dataset.from);
       const no = s ? s.no : v && v.no, cos = $('sh-cos').value.trim();
       close();
-      if (!v || (no === v.no && cos === v.cos)) return;
-      const txt = `${label({ no: v.no, cos: v.cos })} → ${label({ no, cos })}`;
-      KC.api.edit(vid, no, cos);
+      if (!v) return;
+      const edited = no !== v.no || cos !== v.cos;
+      if (!from && !edited) return;
+      const txt = [from && `${label(from)} → ${label(v)}にまとめました`,
+        edited && `${label({ no: v.no, cos: v.cos })} → ${label({ no, cos })}`].filter(Boolean).join('・');
+      if (from) KC.api.merge(from.id, vid);
+      if (edited) KC.api.edit(vid, no, cos);
       U().refresh();
       note(txt);
     });
@@ -1355,9 +1357,9 @@ KC.list = (() => {
       U().refresh();
       note(`${label(v)}：消しました`);
     });
-    // まとめ先をタップで選ぶ（もう一度タップで外す）
+    // 上の絵にまとめる絵をタップで選ぶ（もう一度タップで外す）
     $('sh-merge').addEventListener('click', e => {
-      const im = e.target.closest('img[data-into]');
+      const im = e.target.closest('img[data-from]');
       if (!im) return;
       const on = !im.classList.contains('sel');
       $('sh-merge').querySelectorAll('img').forEach(x => x.classList.remove('sel'));
