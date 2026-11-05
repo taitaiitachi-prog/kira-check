@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T07:13:14.117Z">
+<meta name="kc-build" content="2026-11-05T07:16:08.109Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -50,7 +50,7 @@ input[type=search]::-webkit-search-cancel-button { filter: invert(.7); }
 /* 入力中は下に余白を足し、下の方の行も上まで動かせるようにする */
 .scroll.typing { padding-bottom: var(--vh, 100vh); }
 
-.btn { height: var(--h); padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); display: inline-flex; align-items: center; white-space: nowrap; cursor: pointer; flex: none; }
+.btn { height: var(--h); padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; cursor: pointer; flex: none; }
 .btn.main { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
 .btn:disabled { opacity: .35; cursor: default; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
@@ -58,8 +58,8 @@ input[type=search]::-webkit-search-cancel-button { filter: invert(.7); }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.on { background: var(--panel); color: var(--text); }
 /* 2人の色：取り込みで選んでいる人はボタンを塗る。一覧の絞り込みは文字と下線 */
-#who button.on.pa { background: var(--pa); color: var(--bg); font-weight: 600; }
-#who button.on.pb { background: var(--pb); color: var(--bg); font-weight: 600; }
+#who button.on.pa, #me button.on.pa { background: var(--pa); color: var(--bg); font-weight: 600; }
+#who button.on.pb, #me button.on.pb { background: var(--pb); color: var(--bg); font-weight: 600; }
 #filter button.on.pa { color: var(--pa); box-shadow: inset 0 -2px var(--pa); }
 #filter button.on.pb { color: var(--pb); box-shadow: inset 0 -2px var(--pb); }
 #page-scan[data-who=a] #add { background: var(--pa); border-color: var(--pa); }
@@ -222,6 +222,10 @@ input.cos:disabled { opacity: .5; }
       <button class="btn main" id="save-names">保存</button>
       <input id="size-a" class="size pa-c" type="range" min="0" max="9" step="1" value="0" title="1人目の文字と写真の大きさ">
       <input id="size-b" class="size pb-c" type="range" min="0" max="9" step="1" value="0" title="2人目の文字と写真の大きさ">
+      <div class="seg" id="me" title="この端末を使う人（その人の大きさで見せる）">
+        <button data-p="a" class="pa">A</button>
+        <button data-p="b" class="pb">B</button>
+      </div>
     </div>
     <div class="scroll" id="log"></div>
   </section>
@@ -956,11 +960,15 @@ KC.ui = (() => {
     $('zoom').hidden = false;
   }
 
-  // 文字と写真の大きさ（老眼向け）：0〜9 の10段階。人ごとに Google に覚え、「誰のスクショ？」で選んでいる人の大きさで見せる。
+  // 文字と写真の大きさ（老眼向け）：0〜9 の10段階。人ごとに Google に覚え、この端末を使う人（設定で選ぶ・端末に覚える）の大きさで見せる。
   // 倍率は 1.0〜1.6。1 以上は行を2段にする（data-big）。起動の一瞬も同じ大きさにするため端末にも控える
-  const SIZE_KEY = 'kc-size';
+  const SIZE_KEY = 'kc-size', ME_KEY = 'kc-me';
+  // まだ選んでいない端末は、前の版で使っていた「誰のスクショ？」の人
+  let me = 'a';
+  try { me = (localStorage.getItem(ME_KEY) || localStorage.getItem('kc-who')) === 'b' ? 'b' : 'a'; } catch { /* 覚えられなければ1人目 */ }
+  function paintMe() { $('me').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.p === me)); }
   function applySize(k) {
-    if (k == null) k = S().sizes[KC.scanUi.who === 'b' ? 1 : 0];
+    if (k == null) k = S().sizes[me === 'b' ? 1 : 0];
     k = Math.min(9, Math.max(0, Math.floor(+k) || 0));
     const r = document.documentElement;
     r.style.setProperty('--s', (1 + k * 0.6 / 9).toFixed(3));
@@ -970,10 +978,22 @@ KC.ui = (() => {
 
   function settings() {
     try { applySize(localStorage.getItem(SIZE_KEY) || 0); } catch { applySize(0); }
+    // この端末を使う人：押すとその人の大きさになる（端末に覚える）
+    paintMe();
+    $('me').addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b || b.dataset.p === me) return;
+      const before = me;
+      me = b.dataset.p;
+      try { localStorage.setItem(ME_KEY, me); } catch { /* その場だけ */ }
+      paintMe();
+      applySize();
+      note(`この端末：${pname(before)}→${pname(me)}`);
+    });
     // バーを動かしている間はその場で見せ、離したら保存（前→今を帯に出す）
     ['a', 'b'].forEach(p => {
       const el = $('size-' + p);
-      el.addEventListener('input', () => { if (KC.scanUi.who === p) applySize(el.value); });
+      el.addEventListener('input', () => { if (me === p) applySize(el.value); });
       el.addEventListener('change', () => {
         const k = +el.value, before = S().sizes[p === 'a' ? 0 : 1];
         if (k === before) return;
@@ -1337,7 +1357,6 @@ KC.scanUi = (() => {
       if (!b || running) return;
       who = b.dataset.p;
       try { localStorage.setItem('kc-who', who); } catch { /* その場だけ */ }
-      U().applySize();
       entries.forEach(x => { x.n = x.seen; });   // 入れる数は数えた数に戻す
       render();
       $('files').click();
