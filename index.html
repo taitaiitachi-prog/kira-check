@@ -2,18 +2,20 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T03:49:08.597Z">
+<meta name="kc-build" content="2026-11-05T04:24:30.145Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
-/* 落ち着いたダーク。色は意味のある所だけ（持っている＝緑、新しい＝金） */
+/* 落ち着いたダーク。色は意味のある所だけ（1人目＝青・2人目＝ばら色、新しい＝金） */
 :root {
   --bg: #15171a; --panel: #1d2024; --line: #2c3036; --text: #e6e8eb; --sub: #8d949c;
   --on: #5fc9a8; --off: #4a5058; --gold: #d9b45a; --err: #e07a6e;
+  --pa: #6fa8dc; --pb: #d98fb0;
   --row: 56px;
 }
 * { box-sizing: border-box; margin: 0; }
-html, body { height: 100%; background: var(--bg); color: var(--text); overflow: hidden; }
+/* --vh：キーボードを除いた見えている高さ（ui.js の fitKeyboard が入れる） */
+html, body { height: var(--vh, 100%); background: var(--bg); color: var(--text); overflow: hidden; }
 body {
   font: 15px/1.4 system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
   touch-action: manipulation; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
@@ -30,7 +32,9 @@ input[type=search]::-webkit-search-cancel-button { filter: invert(.7); }
 .tabs button.on { color: var(--text); border-bottom-color: var(--text); }
 .loadbar, .progress { height: 2px; flex: none; background: transparent; overflow: hidden; }
 .loadbar i, .progress i { display: block; height: 100%; width: 0; background: var(--sub); transition: width .2s; }
-.loadbar.busy i { width: 100%; animation: none; opacity: .6; }
+/* 待っている間：短い線が左から右へ流れる */
+.loadbar.busy i { width: 30%; animation: kc-run 1.1s linear infinite; }
+@keyframes kc-run { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 
 .page { display: none; flex: 1; min-height: 0; flex-direction: column; }
 .page.on { display: flex; }
@@ -38,6 +42,8 @@ input[type=search]::-webkit-search-cancel-button { filter: invert(.7); }
 .bar input { flex: 1; }
 .grow { flex: 1; min-width: 0; }
 .scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 64px; }
+/* 入力中は下に余白を足し、下の方の行も上まで動かせるようにする */
+.scroll.typing { padding-bottom: var(--vh, 100vh); }
 
 .btn { height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); display: inline-flex; align-items: center; white-space: nowrap; cursor: pointer; flex: none; }
 .btn.main { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
@@ -46,20 +52,41 @@ input[type=search]::-webkit-search-cancel-button { filter: invert(.7); }
 .seg button { height: 38px; min-width: 52px; max-width: 96px; padding: 0 10px; background: none; border: 0; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.on { background: var(--panel); color: var(--text); }
+/* 2人の色：取り込みで選んでいる人はボタンを塗る。一覧の絞り込みは文字と下線 */
+#who button.on.pa { background: var(--pa); color: var(--bg); font-weight: 600; }
+#who button.on.pb { background: var(--pb); color: var(--bg); font-weight: 600; }
+#filter button.on.pa { color: var(--pa); box-shadow: inset 0 -2px var(--pa); }
+#filter button.on.pb { color: var(--pb); box-shadow: inset 0 -2px var(--pb); }
+#page-scan[data-who=a] #add { background: var(--pa); border-color: var(--pa); }
+#page-scan[data-who=b] #add { background: var(--pb); border-color: var(--pb); }
+#page-scan[data-who=a] .srow input[type=checkbox] { accent-color: var(--pa); }
+#page-scan[data-who=b] .srow input[type=checkbox] { accent-color: var(--pb); }
+.done .pa { color: var(--pa); }
+.done .pb { color: var(--pb); }
 
 /* 絵の行：絵・名前・2人の印。1行に収める */
 .vhead, .vrow { display: grid; grid-template-columns: 76px 1fr 64px 64px; align-items: center; padding: 0 12px; gap: 4px; }
 .vhead { height: 26px; color: var(--sub); font-size: 12px; border-bottom: 1px solid var(--line); flex: none; }
 .vhead .mkh { text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vhead .mkh.pa { color: var(--pa); }
+.vhead .mkh.pb { color: var(--pb); }
 .vrow { height: var(--row); border-bottom: 1px solid var(--line); }
 .vrow .nm, .srow .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nm small { font-size: 13px; color: var(--sub); margin-left: 6px; }
+/* 衣装名の欄（種族の右） */
+input.cos { flex: none; width: 84px; padding: 0 8px; }
+input.cos:disabled { opacity: .5; }
+.nmcell { display: flex; gap: 6px; min-width: 0; }
+.nmcell .picker { flex: 1; }
 /* 絵の枠。切り抜きは背景の玉が多いので、ポケモンのいる真ん中下を拡大して見せる */
 .th { width: 72px; height: 54px; border-radius: 6px; overflow: hidden; background: #222529; display: block; cursor: pointer; flex: none; }
 .th img { width: 100%; height: 100%; display: block; transform: scale(1.4); transform-origin: 50% 72%; }
 .th.sm { width: 48px; height: 36px; border-radius: 4px; }
 .vhead .th { visibility: hidden; height: 0; }
 .mk { height: 44px; border: 0; background: none; font-size: 20px; color: var(--off); cursor: pointer; }
-.mk.on { color: var(--on); font-weight: 700; }
+.mk.on { font-weight: 700; }
+.mk.on[data-p=a] { color: var(--pa); }
+.mk.on[data-p=b] { color: var(--pb); }
 .mk:disabled { cursor: default; opacity: .5; }
 .vrow.none .nm { color: var(--sub); }
 
@@ -78,6 +105,7 @@ input[type=search]::-webkit-search-cancel-button { filter: invert(.7); }
 .picker { position: relative; min-width: 0; }
 .picker input { width: 100%; }
 .picker .pop { position: absolute; left: 0; right: 0; top: 42px; z-index: 20; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; max-height: 260px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+.picker .pop.up { top: auto; bottom: 42px; }
 .picker .pop button { display: flex; align-items: center; gap: 8px; width: 100%; height: 42px; padding: 0 10px; background: none; border: 0; text-align: left; white-space: nowrap; }
 .picker .pop button + button { border-top: 1px solid var(--line); }
 
@@ -86,11 +114,13 @@ input[type=search]::-webkit-search-cancel-button { filter: invert(.7); }
 .undo span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .undo.err span { color: var(--err); }
 .undo.err #undo-btn { display: none; }
+#sync { flex: none; font-style: normal; font-size: 13px; color: var(--sub); }
+#sync[hidden] { display: none; }
 
 #log div { display: flex; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--sub); font-size: 13px; white-space: nowrap; overflow: hidden; }
 #log time { flex: none; width: 92px; }
 
-.sheet { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
+.sheet { position: fixed; left: 0; right: 0; top: 0; height: var(--vh, 100%); background: rgba(0,0,0,.6); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
 .sheet[hidden] { display: none; }
 .sheet-in { width: 100%; max-width: 560px; background: var(--bg); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; padding-bottom: 16px; }
 .sheet-top { display: flex; justify-content: center; position: relative; padding: 14px 12px 0; }
@@ -150,14 +180,14 @@ input[type=search]::-webkit-search-cancel-button { filter: invert(.7); }
     <div class="scroll" id="log"></div>
   </section>
 
-  <div class="undo" id="undo"><span id="undo-text"></span><button class="btn" id="undo-btn">戻す</button></div>
+  <div class="undo" id="undo"><span id="undo-text"></span><i id="sync" hidden>保存中</i><button class="btn" id="undo-btn">戻す</button></div>
 </div>
 
 <!-- 絵をたっぷり見る・種族を直す・まとめる -->
 <div class="sheet" id="sheet" hidden>
   <div class="sheet-in">
     <div class="sheet-top"><img id="sh-img" alt=""><button class="x" id="sh-close" title="閉じる">×</button></div>
-    <div class="bar"><div class="picker grow" id="sh-picker"></div><button class="btn main" id="sh-save">保存</button></div>
+    <div class="bar"><div class="picker grow" id="sh-picker"></div><input class="cos" id="sh-cos" type="text" maxlength="12" placeholder="衣装" autocomplete="off"><button class="btn main" id="sh-save">保存</button></div>
     <div class="sh-merge" id="sh-merge"></div>
   </div>
 </div>
@@ -482,12 +512,17 @@ KC.api = (() => {
     return j.v;
   }
 
+  // 一覧・名前・持っている、の中身を1つの文字にする（Google の答えと手元が同じかを比べるため）
+  const sig = () => JSON.stringify([state.people, [...state.variants.values()].map(v => [v.id, v.no, v.cos]).sort(),
+    [...state.owned.a].sort(), [...state.owned.b].sort()]);
+  // Google の一覧で手元を置きかえる。返す値：記録以外が変わったか
   function setMeta(m) {
+    const before = sig();
     state.people = m.people;
-    state.variants = new Map(m.variants.map(([id, no]) => [id, { id, no }]));
+    state.variants = new Map(m.variants.map(([id, no, cos]) => [id, { id, no, cos: cos || '' }]));
     state.owned = { a: new Set(m.owned.a), b: new Set(m.owned.b) };
     state.log = m.log;
-    return state;
+    return sig() !== before;
   }
   const load = async () => setMeta(await call('api_meta'));
 
@@ -559,14 +594,80 @@ KC.api = (() => {
     return f;
   }
 
-  // 変える操作。どれも新しい一覧を受け取って state を直す
-  const add = async (p, items) => { const r = await call('api_add', p, items); setMeta(r.meta); return r; };
-  const remove = async (p, vids) => setMeta(await call('api_remove', p, vids));
-  const setNo = async (vid, no) => setMeta(await call('api_setNo', vid, no));
-  const merge = async (from, into) => { const r = setMeta(await call('api_merge', from, into)); feats.delete(from); return r; };
-  const setPeople = async names => setMeta(await call('api_people', names));
+  // ---- 変える操作 ----
+  // 手元の state をすぐ変えて画面に出し、Google へは裏で1つずつ順番に送る（待たせないため）。
+  // 送るものが全部終わったら、Google の一覧で手元を合わせる。失敗したら残りは送らず、Google の中身に戻す
+  const hooks = { busy() {}, synced() {}, failed() {} };   // ui.js が中身を入れる
+  let chain = Promise.resolve(), pending = 0, broken = false, last = null;
+  function push(name, ...args) {
+    pending++;
+    hooks.busy(true);
+    const job = chain.then(async () => {
+      if (broken) return;
+      const r = await call(name, ...args);
+      last = r.meta || r;
+    });
+    chain = job.catch(e => { if (!broken) { broken = true; hooks.failed(e); } }).then(async () => {
+      if (--pending) return;
+      let changed = true;
+      try {
+        if (broken) { broken = false; setMeta(await call('api_meta')); }
+        else if (last) changed = setMeta(last);
+      } catch { /* 合わせられなくても手元のまま */ }
+      last = null;
+      hooks.synced(changed);
+      hooks.busy(pending > 0);
+    });
+    return job;
+  }
+  const isBusy = () => pending > 0;
 
-  return { state, load, fetchImages, img, remember, feature, add, remove, setNo, merge, setPeople };
+  // 画面と同じ決まりで文字を整える（Code.gs の kcText_ と同じ）
+  const clean = (s, max = 12) => String(s == null ? '' : s).trim().replace(/^[=+\-@]+/, '').slice(0, max);
+  const newId = () => 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+  // items：[{vid}]（台帳の絵）か [{no, img, cos}]（新しい絵）。返す値：{ids（items と同じ順）, added}
+  function add(p, items) {
+    const ids = [], added = [], send = [];
+    items.forEach(it => {
+      let vid = it.vid;
+      if (vid) send.push({ vid });
+      else {
+        vid = newId();
+        const cos = clean(it.cos);
+        state.variants.set(vid, { id: vid, no: it.no, cos });
+        remember(vid, it.img);
+        send.push({ id: vid, no: it.no, img: it.img, cos });
+      }
+      ids.push(vid);
+      if (!state.owned[p].has(vid)) { state.owned[p].add(vid); added.push(vid); }
+    });
+    push('api_add', p, send);
+    return { ids, added };
+  }
+  function remove(p, vids) {
+    [].concat(vids).forEach(id => state.owned[p].delete(id));
+    push('api_remove', p, vids);
+  }
+  function edit(vid, no, cos) {
+    const v = state.variants.get(vid);
+    if (!v) return;
+    v.no = no;
+    v.cos = clean(cos);
+    push('api_edit', vid, no, v.cos);
+  }
+  function merge(from, into) {
+    ['a', 'b'].forEach(p => { if (state.owned[p].delete(from)) state.owned[p].add(into); });
+    state.variants.delete(from);
+    feats.delete(from);
+    push('api_merge', from, into);
+  }
+  function setPeople(names) {
+    state.people = [0, 1].map(i => clean(names[i]) || 'AB'[i]);
+    push('api_people', names);
+  }
+
+  return { state, hooks, load, isBusy, fetchImages, img, remember, feature, add, remove, edit, merge, setPeople };
 })();
 
 // 画面の共通部分：タブ・「戻す」の帯・種族を選ぶ欄・設定・起動
@@ -575,7 +676,36 @@ KC.ui = (() => {
   const $ = id => document.getElementById(id);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const name = no => KC.NAMES[no - 1] || '?';
+  const label = v => v ? name(v.no) + (v.cos ? ' ' + v.cos : '') : '?';   // 種族名＋衣装名
   const S = () => KC.api.state;
+
+  // キーボードが出ても入力欄が隠れないように：
+  // 画面の高さを「見えている部分」に合わせ、iPhone が勝手に窓ごと動かした分は戻す
+  function fitKeyboard() {
+    const vv = window.visualViewport;
+    const fit = () => {
+      if (vv) document.documentElement.style.setProperty('--vh', Math.round(vv.height) + 'px');
+      if (window.scrollY) window.scrollTo(0, 0);
+      const a = document.activeElement;
+      if (a && a._place) a._place();
+    };
+    if (vv) { vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); }
+    window.addEventListener('scroll', fit);
+    // 一覧の中の入力欄に入ったら、その行を一覧の上の方へ動かす（下に候補とキーボードの場所を空ける）
+    document.addEventListener('focusin', e => {
+      const box = e.target.closest('input') && e.target.closest('.scroll');
+      if (!box) return;
+      box.classList.add('typing');
+      const row = e.target.closest('.srow') || e.target;
+      const go = () => { box.scrollTop += row.getBoundingClientRect().top - box.getBoundingClientRect().top - 4; };
+      go();
+      setTimeout(go, 350);   // キーボードが出終わってからもう一度
+    });
+    document.addEventListener('focusout', e => {
+      const box = e.target.closest('.scroll');
+      if (box) setTimeout(() => { if (!box.contains(document.activeElement)) box.classList.remove('typing'); }, 150);
+    });
+  }
 
   // 指2本・ダブルタップで拡大させない（iPhone は viewport の指定だけでは止まらない）
   function noZoom() {
@@ -608,9 +738,34 @@ KC.ui = (() => {
     $('undo-btn').style.display = fn ? '' : 'none';
   }
   function fail(e) { note('できませんでした：' + ((e && e.message) || e), null, true); }
+  // 待っている間：上の細い線が流れ、下の帯に「保存中」
+  let loading = 0;
+  function showBusy() {
+    const on = loading > 0 || KC.api.isBusy();
+    $('loadbar').classList.toggle('busy', on);
+    $('sync').hidden = !KC.api.isBusy();
+  }
   async function busy(fn) {
-    $('loadbar').classList.add('busy');
-    try { return await fn(); } catch (e) { fail(e); return null; } finally { $('loadbar').classList.remove('busy'); }
+    loading++;
+    showBusy();
+    try { return await fn(); } catch (e) { fail(e); return null; } finally { loading--; showBusy(); }
+  }
+  function hooks() {
+    const h = KC.api.hooks;
+    h.busy = () => {
+      showBusy();
+      if (KC.api.isBusy() && !$('undo').classList.contains('on')) note('');
+    };
+    h.failed = e => note('保存できませんでした（Google の中身に戻します）：' + ((e && e.message) || e), null, true);
+    // 送り終わって、Google の中身が手元と違った（もう1人が変えた・失敗した）ときだけ描き直す
+    h.synced = async changed => {
+      if (!changed) { log(); return; }
+      refresh();
+      await KC.api.fetchImages([...S().variants.keys()]).catch(() => {});
+      fillImages();
+    };
+    // 送り終わる前に閉じようとしたら聞く
+    window.addEventListener('beforeunload', e => { if (KC.api.isBusy()) { e.preventDefault(); e.returnValue = ''; } });
   }
 
   // 2人の名前を画面のあちこちに入れる
@@ -653,11 +808,22 @@ KC.ui = (() => {
         if (nos.length) for (const v of S().variants.values()) if (v.no === nos[0]) list.push({ vid: v.id, no: v.no });
       }
       pop.innerHTML = list.map(c => c.vid
-        ? `<button data-vid="${esc(c.vid)}" data-no="${c.no}"><span class="th sm"><img data-vid="${esc(c.vid)}" alt=""></span>${esc(name(c.no))}</button>`
+        ? `<button data-vid="${esc(c.vid)}" data-no="${c.no}"><span class="th sm"><img data-vid="${esc(c.vid)}" alt=""></span>${esc(label(S().variants.get(c.vid) || c))}</button>`
         : `<button data-no="${c.no}">${esc(name(c.no))}</button>`).join('');
       fillImages(pop);
       pop.hidden = !list.length;
+      place();
     };
+    // 候補は、下に場所があれば下、無ければ上に出す（キーボードに隠れないように）
+    const place = () => {
+      if (pop.hidden) return;
+      const r = inp.getBoundingClientRect(), vh = window.visualViewport ? window.visualViewport.height : innerHeight;
+      const below = vh - r.bottom - 6, above = r.top - 6;
+      const up = below < 170 && above > below;
+      pop.classList.toggle('up', up);
+      pop.style.maxHeight = Math.max(84, Math.min(260, up ? above : below)) + 'px';
+    };
+    inp._place = place;
     const set = (s, quiet) => {
       sel = s;
       inp.value = s ? name(s.no) : '';
@@ -686,12 +852,12 @@ KC.ui = (() => {
   }
 
   function settings() {
-    $('save-names').addEventListener('click', () => busy(async () => {
+    $('save-names').addEventListener('click', () => {
       const before = S().people.join('・');
-      await KC.api.setPeople([$('name-a').value, $('name-b').value]);
+      KC.api.setPeople([$('name-a').value, $('name-b').value]);
       refresh();
       note(`名前：${before} → ${S().people.join('・')}`);
-    }));
+    });
   }
 
   // 一覧・名前・記録を描き直す
@@ -704,7 +870,9 @@ KC.ui = (() => {
 
   async function boot() {
     noZoom();
+    fitKeyboard();
     tabs();
+    hooks();
     settings();
     KC.list.init();
     KC.scanUi.init();
@@ -723,7 +891,7 @@ KC.ui = (() => {
     });
   }
 
-  return { $, esc, name, pname, note, fail, busy, fillImages, picker, refresh, boot };
+  return { $, esc, name, label, pname, note, fail, busy, fillImages, picker, refresh, boot };
 })();
 
 // 一覧の画面（検索もここ）と、絵をたっぷり見る画面（種族を直す・同じ絵をまとめる）
@@ -733,10 +901,11 @@ KC.list = (() => {
   const S = () => KC.api.state;
   let filter = 'all';
 
+  const mkHtml = (v, p) => { const on = S().owned[p].has(v.id); return `<button class="mk${on ? ' on' : ''}" data-p="${p}">${on ? '○' : '×'}</button>`; };
   function rowHtml(v) {
-    const { esc, name } = U(), o = S().owned;
-    const mk = p => `<button class="mk${o[p].has(v.id) ? ' on' : ''}" data-p="${p}">${o[p].has(v.id) ? '○' : '×'}</button>`;
-    return `<div class="vrow" data-vid="${esc(v.id)}"><span class="th"><img data-vid="${esc(v.id)}" alt=""></span><span class="nm">${esc(name(v.no))}</span>${mk('a')}${mk('b')}</div>`;
+    const { esc, name } = U();
+    return `<div class="vrow" data-vid="${esc(v.id)}"><span class="th"><img data-vid="${esc(v.id)}" alt=""></span>` +
+      `<span class="nm">${esc(name(v.no))}${v.cos ? `<small>${esc(v.cos)}</small>` : ''}</span>${mkHtml(v, 'a')}${mkHtml(v, 'b')}</div>`;
   }
 
   function render() {
@@ -745,7 +914,7 @@ KC.list = (() => {
     const hitNos = q ? new Set(KC.ocr.search(q, 60)) : null;
     const o = S().owned;
     const vs = [...S().variants.values()]
-      .filter(v => !hitNos || hitNos.has(v.no))
+      .filter(v => !hitNos || hitNos.has(v.no) || (v.cos && v.cos.includes(q)))
       .filter(v => filter === 'all' || !o[filter].has(v.id))
       .sort((a, b) => a.no - b.no || (a.id < b.id ? -1 : 1));
     let html = vs.map(rowHtml).join('');
@@ -759,20 +928,28 @@ KC.list = (() => {
     fillImages($('list'));
   }
 
-  // ○ と × を切り替える（戻せるので確認はしない）
-  async function toggle(vid, p) {
-    const { busy, note, name, pname } = U();
+  // 1行の印だけ描き直す（一覧全体を描き直すと絵の読み直しで遅い）
+  function paintRow(vid) {
+    const row = U().$('list').querySelector(`.vrow[data-vid="${CSS.escape(vid)}"]`), v = S().variants.get(vid);
+    if (!row || !v) return;
+    if (filter !== 'all' && S().owned[filter].has(vid)) { row.remove(); return; }   // 絞り込みの外になった
+    row.querySelectorAll('.mk').forEach(b => { b.outerHTML = mkHtml(v, b.dataset.p); });
+  }
+
+  // ○ と × を切り替える（戻せるので確認はしない）。画面はすぐ変え、保存は裏で送る
+  function set(vid, p, on) {
+    if (on) KC.api.add(p, [{ vid }]); else KC.api.remove(p, vid);
+    paintRow(vid);
+    KC.scanUi.render();
+  }
+  function toggle(vid, p) {
+    const { note, label, pname } = U();
     const v = S().variants.get(vid);
     const had = S().owned[p].has(vid);
-    await busy(async () => {
-      if (had) await KC.api.remove(p, vid); else await KC.api.add(p, [{ vid }]);
-      U().refresh();
-      const back = async () => {
-        if (had) await KC.api.add(p, [{ vid }]); else await KC.api.remove(p, vid);
-        U().refresh();
-        note(`${pname(p)}：${name(v.no)} ${had ? '×→○' : '○→×'}`);
-      };
-      note(`${pname(p)}：${name(v.no)} ${had ? '○→×' : '×→○'}`, back);
+    set(vid, p, !had);
+    note(`${pname(p)}：${label(v)} ${had ? '○→×' : '×→○'}`, () => {
+      set(vid, p, had);
+      note(`${pname(p)}：${label(v)} ${had ? '×→○' : '○→×'}`);
     });
   }
 
@@ -785,6 +962,7 @@ KC.list = (() => {
     cur = vid;
     $('sh-img').src = KC.api.img(vid);
     pick = picker($('sh-picker'), { value: { no: v.no } });
+    $('sh-cos').value = v.cos || '';
     const others = [...S().variants.values()].filter(x => x.no === v.no && x.id !== vid);
     $('sh-merge').innerHTML = others.length
       ? '<span>同じ絵としてまとめる</span>' + others.map(x => `<img data-vid="${esc(x.id)}" data-into="${esc(x.id)}" alt="" title="この絵にまとめる">`).join('')
@@ -795,7 +973,7 @@ KC.list = (() => {
   const close = () => { U().$('sheet').hidden = true; cur = null; };
 
   function init() {
-    const { $, busy, note, name } = U();
+    const { $, note, name, label } = U();
     $('q').addEventListener('input', render);
     $('filter').addEventListener('click', e => {
       const b = e.target.closest('button[data-f]');
@@ -819,20 +997,21 @@ KC.list = (() => {
       if (v && into) {
         // まとめると元の絵は台帳から消えるので戻せない（タップで選んで保存、の2段階にしている）
         close();
-        busy(async () => {
-          await KC.api.merge(vid, into.dataset.into);
-          U().refresh();
-          note(`${name(v.no)}：絵を1つまとめました`);
-        });
+        KC.api.merge(vid, into.dataset.into);
+        U().refresh();
+        note(`${name(v.no)}：絵を1つまとめました`);
         return;
       }
-      if (!v || !s || s.no === v.no) { close(); return; }
-      const before = v.no;
+      const no = s ? s.no : v && v.no, cos = $('sh-cos').value.trim();
       close();
-      busy(async () => {
-        await KC.api.setNo(vid, s.no);
+      if (!v || (no === v.no && cos === v.cos)) return;
+      const before = { no: v.no, cos: v.cos }, txt = `${label(before)} → ${label({ no, cos })}`;
+      KC.api.edit(vid, no, cos);
+      U().refresh();
+      note(txt, () => {
+        KC.api.edit(vid, before.no, before.cos);
         U().refresh();
-        note(`種族：${name(before)} → ${name(s.no)}`, async () => { await KC.api.setNo(vid, before); U().refresh(); });
+        note(`${label({ no, cos })} → ${label(before)}`);
       });
     });
     // まとめ先をタップで選ぶ（もう一度タップで外す）
@@ -929,23 +1108,32 @@ KC.scanUi = (() => {
   function render() {
     const { $, esc, name, pname, picker } = U();
     $('who').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.p === who));
+    $('page-scan').dataset.who = who;   // 選んでいる人の色にする
     const list = $('scan-list');
     let html = '';
     if (done) {
-      html += `<div class="done"><div class="cnt"><span>${esc(pname(done.who))}</span><b>${done.before} → ${done.after}</b></div>` +
+      html += `<div class="done"><div class="cnt"><span class="p${done.who}">${esc(pname(done.who))}</span><b>${done.before} → ${done.after}</b></div>` +
         `<div class="thumbs">${done.added.map(id => `<span class="th sm"><img data-vid="${esc(id)}" alt=""></span>`).join('')}</div></div>`;
     }
     const vis = visible();
     if (entries.length && !vis.length && !running) html += '<div class="done">増えたキラはありません</div>';
     html += vis.map((e, i) => `<div class="srow${ready(e) ? '' : ' off'}" data-i="${i}">` +
       `<input type="checkbox"${e.on ? ' checked' : ''}><span class="th"><img src="${e.dataUrl}" alt=""></span>` +
-      (e.vid ? `<span class="nm">${esc(name(S().variants.get(e.vid).no))}</span>` : '<div class="picker"></div>') + '</div>').join('');
+      (e.vid ? `<span class="nm">${esc(name(S().variants.get(e.vid).no))}${S().variants.get(e.vid).cos ? `<small>${esc(S().variants.get(e.vid).cos)}</small>` : ''}</span>`
+        : '<div class="nmcell"><div class="picker"></div><input class="cos" type="text" maxlength="12" placeholder="衣装" autocomplete="off"></div>') + '</div>').join('');
     list.innerHTML = html;
     U().fillImages(list);
-    // 台帳にない絵の種族を選ぶ欄
+    // 台帳にない絵：種族を選ぶ欄と、衣装名の欄（台帳の絵を選んだら、その絵の衣装名を出して押せなくする）
     list.querySelectorAll('.srow').forEach(row => {
       const e = vis[+row.dataset.i], host = row.querySelector('.picker');
       if (!host) return;
+      const cos = row.querySelector('.cos');
+      const syncCos = () => {
+        const v = e.sel && e.sel.vid && S().variants.get(e.sel.vid);
+        cos.disabled = !!v;
+        cos.value = v ? v.cos : (e.cos || '');
+      };
+      cos.addEventListener('input', () => { e.cos = cos.value; });
       picker(host, {
         value: e.sel,
         cands: () => [...e.cand.vids.map(id => ({ vid: id, no: S().variants.get(id)?.no })).filter(c => c.no), ...e.cand.nos.map(no => ({ no }))],
@@ -954,35 +1142,34 @@ KC.scanUi = (() => {
           e.on = !!s;
           row.querySelector('input[type=checkbox]').checked = e.on;
           row.classList.toggle('off', !ready(e));
+          syncCos();
           updateAdd();
         },
       });
+      syncCos();
     });
     updateAdd();
   }
 
-  async function add() {
-    const { busy, note, pname } = U();
+  // 追加：画面はすぐ変え、保存は裏で送る（新しい絵はこの端末にも覚える）
+  function add() {
+    const { note, pname } = U();
     const p = who, rows = visible().filter(ready);
     if (!rows.length) return;
-    const items = rows.map(e => e.vid ? { vid: e.vid } : e.sel.vid ? { vid: e.sel.vid } : { no: e.sel.no, img: e.dataUrl });
+    const items = rows.map(e => e.vid ? { vid: e.vid } : e.sel.vid ? { vid: e.sel.vid } : { no: e.sel.no, img: e.dataUrl, cos: e.cos });
     const before = S().owned[p].size;
-    await busy(async () => {
-      const r = await KC.api.add(p, items);
-      // 新しく台帳に入った絵は、もらい直さなくていいように覚えておく
-      rows.forEach((e, i) => {
-        if (!e.vid && !e.sel.vid) KC.api.remember(r.ids[i], e.dataUrl);
-        e.vid = r.ids[i];
-        e.dataUrl = KC.api.img(e.vid) || e.dataUrl;
-      });
-      done = { who: p, before, after: S().owned[p].size, added: r.added };
+    const r = KC.api.add(p, items);
+    rows.forEach((e, i) => {
+      e.vid = r.ids[i];
+      e.dataUrl = KC.api.img(e.vid) || e.dataUrl;
+    });
+    done = { who: p, before, after: S().owned[p].size, added: r.added };
+    U().refresh();
+    note(`${pname(p)}：${before} → ${S().owned[p].size}`, () => {
+      KC.api.remove(p, r.added);
+      done = null;
       U().refresh();
-      note(`${pname(p)}：${before} → ${S().owned[p].size}`, async () => {
-        await KC.api.remove(p, r.added);
-        done = null;
-        U().refresh();
-        note(`${pname(p)}：${S().owned[p].size + r.added.length} → ${S().owned[p].size}`);
-      });
+      note(`${pname(p)}：${S().owned[p].size + r.added.length} → ${S().owned[p].size}`);
     });
   }
 
