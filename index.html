@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T08:05:27.687Z">
+<meta name="kc-build" content="2026-11-05T08:12:35.195Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -12,11 +12,11 @@
   --on: #5fc9a8; --off: #4a5058; --gold: #d9b45a; --err: #e07a6e;
   --pa: #6fa8dc; --pb: #d98fb0;
   /* 大きさ：倍率 --s（1.0〜1.6。設定のバーで人ごと。ui.js の applySize が入れる）から、
-     文字・入力欄・ボタンの高さ・行の高さ・絵・衣装欄・−＋の幅・印の欄を決める */
+     文字・入力欄・ボタンの高さ・行の高さ・絵・−＋の幅・印の欄を決める */
   --s: 1;
   --fs: calc(15px * var(--s)); --fin: max(16px, calc(16px * var(--s))); --h: calc(40px * var(--s)); --row: calc(56px * var(--s));
   --thw: calc(72px * var(--s)); --thh: calc(54px * var(--s)); --smw: calc(48px * var(--s)); --smh: calc(36px * var(--s));
-  --cos-w: calc(56px + 20px * var(--s)); --stb: calc(30px * var(--s)); --mkw: calc(64px * var(--s));
+  --stb: calc(30px * var(--s)); --mkw: calc(64px * var(--s));
 }
 * { box-sizing: border-box; margin: 0; }
 /* --vh：キーボードを除いた見えている高さ（ui.js の fitKeyboard が入れる） */
@@ -95,8 +95,10 @@ input.size { flex: 1; height: var(--h); padding: 0; border: 0; background: none;
 .vrow { height: var(--row); border-bottom: 1px solid var(--line); }
 .vrow .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nm small { font-size: .85em; color: var(--sub); margin-left: 6px; }
-/* 衣装名の欄（種族の右） */
-input.cos { flex: none; width: var(--cos-w); padding: 0 8px; }
+/* 衣装名の欄（種族の右）。種族の欄と同じ幅（残りを半分ずつ） */
+/* 衣装の欄は余白と枠（8px×2＋1px×2）が幅の外に足されるので、種族の欄にも同じ 18px を最初から持たせる */
+input.cos { flex: 1 1 0; width: 0; padding: 0 8px; }
+.pick .picker, #sh-picker { flex: 1 1 18px; }
 input.cos:disabled { opacity: .5; }
 /* 絵の枠。切り抜きは背景の玉が多いので、ポケモンのいる真ん中下を拡大して見せる */
 .th { width: var(--thw); height: var(--thh); border-radius: 6px; overflow: hidden; background: #222529; display: block; cursor: pointer; flex: none; }
@@ -121,7 +123,6 @@ input.cos:disabled { opacity: .5; }
 .pick { scrollbar-width: none; }
 .pick::-webkit-scrollbar { display: none; }
 .pick.new { overflow: visible; }
-.pick .picker { flex: 1; }
 .tile { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 100%; padding: 0 10px 0 2px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--sub); white-space: nowrap; cursor: pointer; }
 .tile .th.sm { width: calc((var(--h) - 6px) * 4 / 3); height: calc(var(--h) - 6px); }
 .tile.on { border: 2px solid var(--text); color: var(--text); font-weight: 600; }
