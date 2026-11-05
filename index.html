@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T07:10:58.851Z">
+<meta name="kc-build" content="2026-11-05T07:13:14.117Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -1025,8 +1025,8 @@ KC.list = (() => {
   const S = () => KC.api.state;
   let filter = 'all';
 
-  // 印：持っていない ×・1匹 ○・2匹から数
-  const mkText = n => n ? (n > 1 ? String(n) : '○') : '×';
+  // 印：持っていない ×・持っていれば数（1・2・3…）
+  const mkText = n => n ? String(n) : '×';
   const mkHtml = (v, p) => { const n = KC.api.have(p, v.id); return `<button class="mk${n ? ' on' : ''}" data-p="${p}">${mkText(n)}</button>`; };
   function rowHtml(v) {
     const { esc, name } = U();
@@ -1074,7 +1074,7 @@ KC.list = (() => {
     KC.scanUi.render();
     note(`${pname(p)}：${label(v)} ${before > 1 || n > 1 ? `${before}→${n}` : `${mkText(before)}→${mkText(n)}`}`);
   }
-  // 印のタップ：押すたびに1匹増える（×→○→2→3…）。減らすのは大きく見る画面の −
+  // 印のタップ：押すたびに1匹増える（×→1→2→3…）。減らすのは大きく見る画面の −
   const tapMark = (vid, p) => setCount(vid, p, KC.api.have(p, vid) + 1);
 
   // 絵をたっぷり見る画面
