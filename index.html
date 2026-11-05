@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T09:36:42.345Z">
+<meta name="kc-build" content="2026-11-05T17:20:26.034Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -179,6 +179,9 @@ input.cos:disabled { opacity: .5; }
 #sheet .x { top: calc(4px + (var(--h) - 44px) / 2); }   /* × は並び順の −／＋ と高さの真ん中をそろえる */
 .sh-ord { position: absolute; left: 12px; top: 4px; display: inline-flex; align-items: center; gap: 6px; }
 .sh-ord small { color: var(--sub); font-size: .85em; }
+/* 並び順の数字の欄（2けたが入る幅で固定。iPhone が拡大しないよう文字は 16px 以上） */
+.sh-ord .step input { width: 2.2em; height: 100%; padding: 0; border: 0; border-radius: 0; background: none; text-align: center; font-weight: 700; }
+.sh-ord .step input:focus { background: var(--panel); }
 /* 小さい絵と同じく、ポケモンのいる真ん中下を拡大して見せる */
 /* 下の入力欄が画面に収まるよう、写真は見えている高さの 36% まで */
 /* 基準は svh（キーボードが出ても変わらない画面の高さ）。入力中も写真の大きさは変えない */
@@ -188,6 +191,11 @@ input.cos:disabled { opacity: .5; }
 .sh-counts { padding: 8px 0 0; }
 .cnt-row { display: flex; align-items: center; gap: 8px; padding: 4px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* まとめる候補は1行に並べ、多ければ横に動かす（折り返さない） */
+.sh-foot { display: flex; align-items: center; gap: 8px; padding-right: 12px; }
+/* 消す前の注意：画面の真ん中に小さく出す（大きく見る画面より上） */
+.sheet.ask { z-index: 40; align-items: center; }
+.ask-in { width: calc(100% - 32px); max-width: 420px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; }
+.ask-in p { margin: 0; padding: 16px 16px 4px; line-height: 1.6; }
 .sh-merge { display: flex; gap: 6px; align-items: center; padding: 0 12px; min-height: 46px; color: var(--sub); font-size: .85em; white-space: nowrap; overflow-x: auto; }
 .sh-merge > * { flex: none; }
 .sh-merge img { width: calc(var(--smw) + 8px); height: calc(var(--smh) + 6px); border-radius: 5px; cursor: pointer; border: 2px solid var(--line); }
@@ -262,7 +270,16 @@ input.cos:disabled { opacity: .5; }
     <div class="sheet-top"><span class="sh-ord" id="sh-ord" title="並び順：同じ種族の衣装違いは、一覧で小さい順に並ぶ"></span><span class="pic"><img id="sh-img" alt=""></span><button class="x" id="sh-close" title="閉じる">×</button></div>
     <div class="sh-counts" id="sh-counts" title="持っている数"></div>
     <div class="bar"><div class="picker grow" id="sh-picker"></div><input class="cos" id="sh-cos" type="text" maxlength="12" placeholder="衣装" autocomplete="off"><button class="btn main" id="sh-save">保存</button></div>
-    <div class="sh-merge" id="sh-merge"></div>
+    <!-- 左に「同じ絵としてまとめる」、右端に「消す」（押すと注意の小窓） -->
+    <div class="sh-foot"><div class="sh-merge grow" id="sh-merge"></div><button class="btn" id="sh-del" title="この絵を台帳から消す">消す</button></div>
+  </div>
+</div>
+
+<!-- 消す前の注意（戻せない操作なので聞く。決めるボタンは右端） -->
+<div class="sheet ask" id="ask" hidden>
+  <div class="ask-in">
+    <p id="ask-text"></p>
+    <div class="bar"><span class="grow"></span><button class="btn" id="ask-no">やめる</button><button class="btn main" id="ask-yes">消す</button></div>
   </div>
 </div>
 
@@ -803,6 +820,13 @@ KC.api = (() => {
     feats.delete(from);
     push('api_merge', from, into);
   }
+  // 絵を台帳から消す（2人の数・オスメスの記録も）。戻せないので画面で聞いてから呼ぶ
+  function remove(vid) {
+    ['a', 'b'].forEach(p => { state.owned[p].delete(vid); state.gender[p].delete(vid); });
+    state.variants.delete(vid);
+    feats.delete(vid);
+    push('api_remove', vid);
+  }
   function setPeople(names) {
     state.people = [0, 1].map(i => clean(names[i]) || 'AB'[i]);
     push('api_people', names);
@@ -813,7 +837,7 @@ KC.api = (() => {
     push('api_size', p, k);
   }
 
-  return { state, hooks, load, isBusy, fetchImages, img, remember, feature, add, count, have, gender, setGender, total, edit, order, cmp, merge, setPeople, setSize };
+  return { state, hooks, load, isBusy, fetchImages, img, remember, feature, add, count, have, gender, setGender, total, edit, order, cmp, merge, remove, setPeople, setSize };
 })();
 
 // 画面の共通部分：タブ・下の帯（前→今・保存中）・種族を選ぶ欄・設定・起動
@@ -1101,7 +1125,7 @@ KC.ui = (() => {
   return { $, esc, name, label, pname, note, fail, busy, fillImages, picker, SYM, gNorm, sexHtml, stepHtml, zoom, applySize, refresh, boot };
 })();
 
-// 一覧の画面（検索もここ）と、絵をたっぷり見る画面（種族を直す・同じ絵をまとめる）
+// 一覧の画面（検索もここ）と、絵をたっぷり見る画面（種族を直す・同じ絵をまとめる・消す）
 window.KC = window.KC || {};
 KC.list = (() => {
   const U = () => KC.ui;
@@ -1191,8 +1215,31 @@ KC.list = (() => {
       return `<div class="cnt-row" data-p="${p}"><span class="p${p} grow">${esc(pname(p))}</span><span class="sex">${sexHtml(KC.api.gender(p, cur), !n)}</span>${stepHtml(n)}</div>`;
     }).join('');
   }
-  // 衣装違いの並び順の −／＋（まとめる候補の行の右端）
-  const paintOrd = () => { U().$('sh-ord').innerHTML = '<small>並び</small>' + U().stepHtml(S().variants.get(cur).ord); };
+  // 衣装違いの並び順（写真の左上）。−／＋ のほか、真ん中の数字は打ち込める（0〜99）
+  function paintOrd() {
+    const k = S().variants.get(cur).ord, box = U().$('sh-ord'), inp = box.querySelector('input');
+    // もう欄があれば中身だけ直す（打ち込み中に −／＋ を押しても、押したボタンが消えないように）
+    if (inp) {
+      inp.value = k;
+      box.querySelector('[data-d="-1"]').disabled = !k;
+      box.querySelector('[data-d="1"]').disabled = k >= 99;
+      return;
+    }
+    box.innerHTML =`<small>並び</small><span class="step"><button data-d="-1"${k ? '' : ' disabled'}>−</button>` +
+      `<input id="sh-ord-n" type="text" inputmode="numeric" maxlength="2" autocomplete="off" value="${k}"><button data-d="1"${k < 99 ? '' : ' disabled'}>＋</button></span>`;
+  }
+  // 並び順を変える：すぐ一覧の並びを変え、Google へは裏で送る（戻せるので確認しない）
+  function setOrd(k) {
+    const { note, label } = U();
+    const v = cur && S().variants.get(cur);
+    if (!v) return;
+    const before = v.ord;
+    KC.api.order(cur, k);
+    paintOrd();
+    if (v.ord === before) return;
+    render();
+    note(`${label(v)}：並び ${before}→${v.ord}`);
+  }
   function open(vid) {
     const { $, esc, picker, fillImages } = U();
     const v = S().variants.get(vid);
@@ -1259,16 +1306,43 @@ KC.list = (() => {
       if (b.dataset.g) toggleGender(cur, p, b.dataset.g);
       else setCount(cur, p, KC.api.have(p, cur) + Number(b.dataset.d));
     });
-    // 並び順の −／＋（押したらすぐ一覧の並びが変わる。戻せるので確認しない）
+    // 並び順の −／＋
     $('sh-ord').addEventListener('click', e => {
       const b = e.target.closest('button[data-d]'), v = cur && S().variants.get(cur);
-      if (!b || !v || b.disabled) return;
-      const before = v.ord;
-      KC.api.order(cur, before + Number(b.dataset.d));
-      if (v.ord === before) return;
-      paintOrd();
-      render();
-      note(`${label(v)}：並び ${before}→${v.ord}`);
+      if (b && v && !b.disabled) setOrd(v.ord + Number(b.dataset.d));
+    });
+    // 並び順の数字を打ち込む：数字だけ残し（全角も半角に）、欄から離れたとき・Enter で決める。空なら元のまま
+    $('sh-ord').addEventListener('input', e => {
+      const t = e.target;
+      t.value = t.value.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\D/g, '').slice(0, 2);
+    });
+    $('sh-ord').addEventListener('change', e => {
+      if (e.target.value === '') paintOrd(); else setOrd(Number(e.target.value));
+    });
+    $('sh-ord').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+    // 押したらカーソルは最後（iPhone は入ったあとに位置を決め直すので少し待つ）
+    $('sh-ord').addEventListener('focusin', e => {
+      const t = e.target;
+      setTimeout(() => { const n = t.value.length; t.setSelectionRange(n, n); }, 0);
+    });
+    // 消す：戻せないので注意の小窓で聞く。「消す」で台帳から消し、2人の記録も消える
+    const ask = on => { $('ask').hidden = !on; };
+    $('sh-del').addEventListener('click', () => {
+      const v = cur && S().variants.get(cur);
+      if (!v) return;
+      $('ask-text').textContent = `${label(v)} の絵を消します。2人の数とオスメスの記録も消え、元に戻せません。`;
+      ask(true);
+    });
+    $('ask-no').addEventListener('click', () => ask(false));
+    $('ask').addEventListener('click', e => { if (e.target === $('ask')) ask(false); });
+    $('ask-yes').addEventListener('click', () => {
+      const v = cur && S().variants.get(cur);
+      ask(false);
+      if (!v) return;
+      close();
+      KC.api.remove(v.id);
+      U().refresh();
+      note(`${label(v)}：消しました`);
     });
     // まとめ先をタップで選ぶ（もう一度タップで外す）
     $('sh-merge').addEventListener('click', e => {
