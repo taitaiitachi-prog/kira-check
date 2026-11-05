@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T07:37:26.274Z">
+<meta name="kc-build" content="2026-11-05T07:42:58.738Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -84,11 +84,14 @@ input.size.pb-c { accent-color: var(--pb); }
 .step button:disabled { opacity: .3; cursor: default; }
 .step b { min-width: 1.3em; text-align: center; }
 .had { color: var(--sub); font-size: .85em; white-space: nowrap; }
-/* オスメスの ♂／♀（大きく見る画面の数の左）。2人の色とぶつかるので色は付けず、付いている方を明るく塗る */
+/* オスメスの ♂／♀（大きく見る画面の数の左）。付いている方はその人の色で塗りつぶす（取り込みの人のボタンと同じ見せ方）。
+   付いていない方は暗い記号だけ */
 .sex { display: inline-flex; height: var(--h); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
 .sex button { width: calc(var(--stb) + 8px); height: 100%; background: none; border: 0; color: var(--off); font-size: 1.1em; cursor: pointer; }
 .sex button + button { border-left: 1px solid var(--line); }
-.sex button.on { background: var(--panel); color: var(--text); font-weight: 700; }
+.sex button.on { color: var(--bg); font-weight: 700; }
+.cnt-row[data-p=a] .sex button.on { background: var(--pa); }
+.cnt-row[data-p=b] .sex button.on { background: var(--pb); }
 .sex button:disabled { opacity: .3; cursor: default; }
 /* 一覧の印：数の横に小さく ♂♀ */
 .mk small { font-size: .6em; font-weight: 400; margin-left: 2px; }
