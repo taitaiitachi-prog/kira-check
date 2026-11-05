@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T09:14:41.794Z">
+<meta name="kc-build" content="2026-11-05T09:22:14.942Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -1096,9 +1096,9 @@ KC.list = (() => {
   // オスメスの記号（記号は ui.js の SYM）
   const gSym = g => (g.includes('m') ? U().SYM.m : '') + (g.includes('f') ? U().SYM.f : '');
   const gText = g => gSym(g) || '−';
-  // 印の数の横に、記録したオスメスを小さく出す
+  // 印の数の横に、記録したオスメスを小さく出す（♂♀ 両方そろっていれば出さない）
   const mkHtml = (v, p) => {
-    const n = KC.api.have(p, v.id), g = n ? gSym(KC.api.gender(p, v.id)) : '';
+    const n = KC.api.have(p, v.id), g0 = KC.api.gender(p, v.id), g = n && g0 !== 'mf' ? gSym(g0) : '';
     return `<button class="mk${n ? ' on' : ''}" data-p="${p}">${mkText(n)}${g ? `<small>${g}</small>` : ''}</button>`;
   };
   function rowHtml(v) {
