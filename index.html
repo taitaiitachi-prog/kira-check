@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T04:24:30.145Z">
+<meta name="kc-build" content="2026-11-05T04:34:53.571Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -94,7 +94,9 @@ input.cos:disabled { opacity: .5; }
 .srow { display: grid; grid-template-columns: 36px 76px 1fr; align-items: center; gap: 4px; padding: 0 12px 0 6px; height: var(--row); border-bottom: 1px solid var(--line); }
 .srow input[type=checkbox] { width: 20px; height: 20px; margin: 0 auto; accent-color: var(--on); }
 .srow.off .th, .srow.off .nm { opacity: .4; }
-.btn.disabled { opacity: .35; pointer-events: none; }
+.btn.disabled, .seg.disabled { opacity: .35; pointer-events: none; }
+/* 「誰のスクショ？」：右の名前を押すと写真選びが開く */
+.who-q { flex: none; color: var(--sub); white-space: nowrap; }
 .done .cnt b { color: var(--gold); }
 .done { padding: 12px; border-bottom: 1px solid var(--line); }
 .done .cnt { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
@@ -109,11 +111,10 @@ input.cos:disabled { opacity: .5; }
 .picker .pop button { display: flex; align-items: center; gap: 8px; width: 100%; height: 42px; padding: 0 10px; background: none; border: 0; text-align: left; white-space: nowrap; }
 .picker .pop button + button { border-top: 1px solid var(--line); }
 
-.undo { position: absolute; left: 8px; right: 8px; bottom: 8px; height: 48px; display: none; align-items: center; gap: 8px; padding: 0 6px 0 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
-.undo.on { display: flex; }
-.undo span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.undo.err span { color: var(--err); }
-.undo.err #undo-btn { display: none; }
+.note { position: absolute; left: 8px; right: 8px; bottom: 8px; height: 48px; display: none; align-items: center; gap: 8px; padding: 0 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.note.on { display: flex; }
+.note span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note.err span { color: var(--err); }
 #sync { flex: none; font-style: normal; font-size: 13px; color: var(--sub); }
 #sync[hidden] { display: none; }
 
@@ -135,14 +136,14 @@ input.cos:disabled { opacity: .5; }
 <body>
 <div id="app">
   <nav class="tabs" id="tabs">
-    <button data-tab="list" class="on">一覧</button>
-    <button data-tab="scan">取り込み</button>
+    <button data-tab="scan" class="on">取り込み</button>
+    <button data-tab="list">一覧</button>
     <button data-tab="settings">設定</button>
   </nav>
   <div class="loadbar" id="loadbar"><i></i></div>
 
   <!-- 一覧（検索もここ） -->
-  <section class="page on" id="page-list">
+  <section class="page" id="page-list">
     <div class="bar">
       <input id="q" type="search" placeholder="ポケモン名" autocomplete="off">
       <div class="seg" id="filter">
@@ -156,14 +157,15 @@ input.cos:disabled { opacity: .5; }
   </section>
 
   <!-- 取り込み -->
-  <section class="page" id="page-scan">
+  <section class="page on" id="page-scan">
     <div class="bar">
-      <div class="seg" id="who">
+      <span class="who-q">誰のスクショ？</span>
+      <div class="seg" id="who" title="押すと、その人のスクショを選ぶ（何枚でも）">
         <button data-p="a" class="on pa">A</button>
         <button data-p="b" class="pb">B</button>
       </div>
+      <input id="files" type="file" accept="image/*" multiple hidden>
       <span class="grow"></span>
-      <label class="btn" id="pick" title="ポケモン一覧のスクショを選ぶ（何枚でも）">スクショ<input id="files" type="file" accept="image/*" multiple hidden></label>
       <button class="btn main" id="add" disabled>追加</button>
     </div>
     <div class="progress" id="progress"><i></i></div>
@@ -180,7 +182,7 @@ input.cos:disabled { opacity: .5; }
     <div class="scroll" id="log"></div>
   </section>
 
-  <div class="undo" id="undo"><span id="undo-text"></span><i id="sync" hidden>保存中</i><button class="btn" id="undo-btn">戻す</button></div>
+  <div class="note" id="note"><span id="note-text"></span><i id="sync" hidden>保存中</i></div>
 </div>
 
 <!-- 絵をたっぷり見る・種族を直す・まとめる -->
@@ -670,7 +672,7 @@ KC.api = (() => {
   return { state, hooks, load, isBusy, fetchImages, img, remember, feature, add, remove, edit, merge, setPeople };
 })();
 
-// 画面の共通部分：タブ・「戻す」の帯・種族を選ぶ欄・設定・起動
+// 画面の共通部分：タブ・下の帯（前→今・保存中）・種族を選ぶ欄・設定・起動
 window.KC = window.KC || {};
 KC.ui = (() => {
   const $ = id => document.getElementById(id);
@@ -728,16 +730,13 @@ KC.ui = (() => {
     });
   }
 
-  // 下の帯：最後にしたこと（前→今）と「戻す」。次の操作まで出しておく
-  let undoFn = null;
-  function note(text, fn, err) {
-    undoFn = fn || null;
-    $('undo-text').textContent = text;
-    $('undo').classList.add('on');
-    $('undo').classList.toggle('err', !!err);
-    $('undo-btn').style.display = fn ? '' : 'none';
+  // 下の帯：最後にしたこと（前→今）。次の操作まで出しておく
+  function note(text, err) {
+    $('note-text').textContent = text;
+    $('note').classList.add('on');
+    $('note').classList.toggle('err', !!err);
   }
-  function fail(e) { note('できませんでした：' + ((e && e.message) || e), null, true); }
+  function fail(e) { note('できませんでした：' + ((e && e.message) || e), true); }
   // 待っている間：上の細い線が流れ、下の帯に「保存中」
   let loading = 0;
   function showBusy() {
@@ -754,9 +753,9 @@ KC.ui = (() => {
     const h = KC.api.hooks;
     h.busy = () => {
       showBusy();
-      if (KC.api.isBusy() && !$('undo').classList.contains('on')) note('');
+      if (KC.api.isBusy() && !$('note').classList.contains('on')) note('');
     };
-    h.failed = e => note('保存できませんでした（Google の中身に戻します）：' + ((e && e.message) || e), null, true);
+    h.failed = e => note('保存できませんでした（Google の中身に戻します）：' + ((e && e.message) || e), true);
     // 送り終わって、Google の中身が手元と違った（もう1人が変えた・失敗した）ときだけ描き直す
     h.synced = async changed => {
       if (!changed) { log(); return; }
@@ -876,13 +875,6 @@ KC.ui = (() => {
     settings();
     KC.list.init();
     KC.scanUi.init();
-    $('undo-btn').addEventListener('click', async () => {
-      const fn = undoFn;
-      if (!fn) return;
-      $('undo').classList.remove('on');
-      undoFn = null;
-      await busy(fn);
-    });
     await busy(async () => {
       await KC.api.load();
       refresh();
@@ -947,10 +939,7 @@ KC.list = (() => {
     const v = S().variants.get(vid);
     const had = S().owned[p].has(vid);
     set(vid, p, !had);
-    note(`${pname(p)}：${label(v)} ${had ? '○→×' : '×→○'}`, () => {
-      set(vid, p, had);
-      note(`${pname(p)}：${label(v)} ${had ? '×→○' : '○→×'}`);
-    });
+    note(`${pname(p)}：${label(v)} ${had ? '○→×' : '×→○'}`);
   }
 
   // 絵をたっぷり見る画面
@@ -1005,14 +994,10 @@ KC.list = (() => {
       const no = s ? s.no : v && v.no, cos = $('sh-cos').value.trim();
       close();
       if (!v || (no === v.no && cos === v.cos)) return;
-      const before = { no: v.no, cos: v.cos }, txt = `${label(before)} → ${label({ no, cos })}`;
+      const txt = `${label({ no: v.no, cos: v.cos })} → ${label({ no, cos })}`;
       KC.api.edit(vid, no, cos);
       U().refresh();
-      note(txt, () => {
-        KC.api.edit(vid, before.no, before.cos);
-        U().refresh();
-        note(`${label({ no, cos })} → ${label(before)}`);
-      });
+      note(txt);
     });
     // まとめ先をタップで選ぶ（もう一度タップで外す）
     $('sh-merge').addEventListener('click', e => {
@@ -1049,7 +1034,7 @@ KC.scanUi = (() => {
     const { $ } = U();
     running = true;
     $('add').disabled = true;
-    $('pick').classList.add('disabled');
+    $('who').classList.add('disabled');
     try {
       prog(0.02);
       // 台帳の絵の特徴をそろえる
@@ -1095,7 +1080,7 @@ KC.scanUi = (() => {
       U().fail(err);
     } finally {
       running = false;
-      $('pick').classList.remove('disabled');
+      $('who').classList.remove('disabled');
       render();
       setTimeout(() => prog(0), 600);
     }
@@ -1165,21 +1150,18 @@ KC.scanUi = (() => {
     });
     done = { who: p, before, after: S().owned[p].size, added: r.added };
     U().refresh();
-    note(`${pname(p)}：${before} → ${S().owned[p].size}`, () => {
-      KC.api.remove(p, r.added);
-      done = null;
-      U().refresh();
-      note(`${pname(p)}：${S().owned[p].size + r.added.length} → ${S().owned[p].size}`);
-    });
+    note(`${pname(p)}：${before} → ${S().owned[p].size}`);
   }
 
   function init() {
     const { $ } = U();
+    // 名前を押す ＝ その人のスクショを選ぶ（すぐ写真選びを開く）
     $('who').addEventListener('click', e => {
       const b = e.target.closest('button[data-p]');
-      if (!b) return;
+      if (!b || running) return;
       who = b.dataset.p;
       render();
+      $('files').click();
     });
     $('files').addEventListener('change', async () => {
       const fs = [...$('files').files];
