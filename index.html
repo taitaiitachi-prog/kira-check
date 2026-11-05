@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="kc-build" content="2026-11-05T03:49:08.597Z">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>kira-check</title>
+<style>
+/* 落ち着いたダーク。色は意味のある所だけ（持っている＝緑、新しい＝金） */
+:root {
+  --bg: #15171a; --panel: #1d2024; --line: #2c3036; --text: #e6e8eb; --sub: #8d949c;
+  --on: #5fc9a8; --off: #4a5058; --gold: #d9b45a; --err: #e07a6e;
+  --row: 56px;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); overflow: hidden; }
+body {
+  font: 15px/1.4 system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  touch-action: manipulation; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
+}
+button, input { font: inherit; color: inherit; }
+/* iPhone は 16px 未満の入力欄で勝手に拡大するので 16px */
+input { font-size: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; height: 40px; min-width: 0; outline: none; }
+input:focus { border-color: var(--sub); }
+input[type=search]::-webkit-search-cancel-button { filter: invert(.7); }
+
+#app { height: 100%; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; position: relative; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); flex: none; }
+.tabs button { flex: 1; height: 46px; background: none; border: 0; color: var(--sub); border-bottom: 2px solid transparent; }
+.tabs button.on { color: var(--text); border-bottom-color: var(--text); }
+.loadbar, .progress { height: 2px; flex: none; background: transparent; overflow: hidden; }
+.loadbar i, .progress i { display: block; height: 100%; width: 0; background: var(--sub); transition: width .2s; }
+.loadbar.busy i { width: 100%; animation: none; opacity: .6; }
+
+.page { display: none; flex: 1; min-height: 0; flex-direction: column; }
+.page.on { display: flex; }
+.bar { display: flex; gap: 8px; align-items: center; padding: 10px 12px; flex: none; }
+.bar input { flex: 1; }
+.grow { flex: 1; min-width: 0; }
+.scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 64px; }
+
+.btn { height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); display: inline-flex; align-items: center; white-space: nowrap; cursor: pointer; flex: none; }
+.btn.main { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+.btn:disabled { opacity: .35; cursor: default; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
+.seg button { height: 38px; min-width: 52px; max-width: 96px; padding: 0 10px; background: none; border: 0; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--panel); color: var(--text); }
+
+/* 絵の行：絵・名前・2人の印。1行に収める */
+.vhead, .vrow { display: grid; grid-template-columns: 76px 1fr 64px 64px; align-items: center; padding: 0 12px; gap: 4px; }
+.vhead { height: 26px; color: var(--sub); font-size: 12px; border-bottom: 1px solid var(--line); flex: none; }
+.vhead .mkh { text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vrow { height: var(--row); border-bottom: 1px solid var(--line); }
+.vrow .nm, .srow .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 絵の枠。切り抜きは背景の玉が多いので、ポケモンのいる真ん中下を拡大して見せる */
+.th { width: 72px; height: 54px; border-radius: 6px; overflow: hidden; background: #222529; display: block; cursor: pointer; flex: none; }
+.th img { width: 100%; height: 100%; display: block; transform: scale(1.4); transform-origin: 50% 72%; }
+.th.sm { width: 48px; height: 36px; border-radius: 4px; }
+.vhead .th { visibility: hidden; height: 0; }
+.mk { height: 44px; border: 0; background: none; font-size: 20px; color: var(--off); cursor: pointer; }
+.mk.on { color: var(--on); font-weight: 700; }
+.mk:disabled { cursor: default; opacity: .5; }
+.vrow.none .nm { color: var(--sub); }
+
+/* 取り込みの確認の行：選ぶ・絵・種族・状態 */
+.srow { display: grid; grid-template-columns: 36px 76px 1fr; align-items: center; gap: 4px; padding: 0 12px 0 6px; height: var(--row); border-bottom: 1px solid var(--line); }
+.srow input[type=checkbox] { width: 20px; height: 20px; margin: 0 auto; accent-color: var(--on); }
+.srow.off .th, .srow.off .nm { opacity: .4; }
+.btn.disabled { opacity: .35; pointer-events: none; }
+.done .cnt b { color: var(--gold); }
+.done { padding: 12px; border-bottom: 1px solid var(--line); }
+.done .cnt { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.done .cnt b { font-size: 18px; }
+.done .thumbs { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* 種族を選ぶ欄（入力すると下に候補） */
+.picker { position: relative; min-width: 0; }
+.picker input { width: 100%; }
+.picker .pop { position: absolute; left: 0; right: 0; top: 42px; z-index: 20; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; max-height: 260px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+.picker .pop button { display: flex; align-items: center; gap: 8px; width: 100%; height: 42px; padding: 0 10px; background: none; border: 0; text-align: left; white-space: nowrap; }
+.picker .pop button + button { border-top: 1px solid var(--line); }
+
+.undo { position: absolute; left: 8px; right: 8px; bottom: 8px; height: 48px; display: none; align-items: center; gap: 8px; padding: 0 6px 0 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.undo.on { display: flex; }
+.undo span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.undo.err span { color: var(--err); }
+.undo.err #undo-btn { display: none; }
+
+#log div { display: flex; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--sub); font-size: 13px; white-space: nowrap; overflow: hidden; }
+#log time { flex: none; width: 92px; }
+
+.sheet { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
+.sheet[hidden] { display: none; }
+.sheet-in { width: 100%; max-width: 560px; background: var(--bg); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; padding-bottom: 16px; }
+.sheet-top { display: flex; justify-content: center; position: relative; padding: 14px 12px 0; }
+.sheet-top img { width: 192px; height: 144px; border-radius: 10px; background: #222529; }
+.sheet .x { position: absolute; right: 8px; top: 8px; width: 40px; height: 40px; border: 0; background: none; color: var(--sub); font-size: 22px; }
+.sh-merge { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 0 12px; min-height: 46px; color: var(--sub); font-size: 13px; }
+.sh-merge img { width: 56px; height: 42px; border-radius: 5px; cursor: pointer; border: 2px solid var(--line); }
+.sh-merge img.sel { border-color: var(--on); }
+
+</style>
+</head>
+<body>
+<div id="app">
+  <nav class="tabs" id="tabs">
+    <button data-tab="list" class="on">一覧</button>
+    <button data-tab="scan">取り込み</button>
+    <button data-tab="settings">設定</button>
+  </nav>
+  <div class="loadbar" id="loadbar"><i></i></div>
+
+  <!-- 一覧（検索もここ） -->
+  <section class="page on" id="page-list">
+    <div class="bar">
+      <input id="q" type="search" placeholder="ポケモン名" autocomplete="off">
+      <div class="seg" id="filter">
+        <button data-f="all" class="on">全部</button>
+        <button data-f="a" class="pa">A×</button>
+        <button data-f="b" class="pb">B×</button>
+      </div>
+    </div>
+    <div class="vhead"><span class="th"></span><span class="nm"></span><span class="mkh pa">A</span><span class="mkh pb">B</span></div>
+    <div class="scroll" id="list"></div>
+  </section>
+
+  <!-- 取り込み -->
+  <section class="page" id="page-scan">
+    <div class="bar">
+      <div class="seg" id="who">
+        <button data-p="a" class="on pa">A</button>
+        <button data-p="b" class="pb">B</button>
+      </div>
+      <span class="grow"></span>
+      <label class="btn" id="pick" title="ポケモン一覧のスクショを選ぶ（何枚でも）">スクショ<input id="files" type="file" accept="image/*" multiple hidden></label>
+      <button class="btn main" id="add" disabled>追加</button>
+    </div>
+    <div class="progress" id="progress"><i></i></div>
+    <div class="scroll" id="scan-list"></div>
+  </section>
+
+  <!-- 設定 -->
+  <section class="page" id="page-settings">
+    <div class="bar">
+      <input id="name-a" maxlength="12" placeholder="1人目" title="1人目の名前">
+      <input id="name-b" maxlength="12" placeholder="2人目" title="2人目の名前">
+      <button class="btn main" id="save-names">保存</button>
+    </div>
+    <div class="scroll" id="log"></div>
+  </section>
+
+  <div class="undo" id="undo"><span id="undo-text"></span><button class="btn" id="undo-btn">戻す</button></div>
+</div>
+
+<!-- 絵をたっぷり見る・種族を直す・まとめる -->
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-in">
+    <div class="sheet-top"><img id="sh-img" alt=""><button class="x" id="sh-close" title="閉じる">×</button></div>
+    <div class="bar"><div class="picker grow" id="sh-picker"></div><button class="btn main" id="sh-save">保存</button></div>
+    <div class="sh-merge" id="sh-merge"></div>
+  </div>
+</div>
+
+<script>
+// ポケモンの日本語名（図鑑番号順。PokeAPI の無料データから作成。添字+1 が図鑑番号）
+window.KC=window.KC||{};KC.NAMES=["フシギダネ","フシギソウ","フシギバナ","ヒトカゲ","リザード","リザードン","ゼニガメ","カメール","カメックス","キャタピー","トランセル","バタフリー","ビードル","コクーン","スピアー","ポッポ","ピジョン","ピジョット","コラッタ","ラッタ","オニスズメ","オニドリル","アーボ","アーボック","ピカチュウ","ライチュウ","サンド","サンドパン","ニドラン♀","ニドリーナ","ニドクイン","ニドラン♂","ニドリーノ","ニドキング","ピッピ","ピクシー","ロコン","キュウコン","プリン","プクリン","ズバット","ゴルバット","ナゾノクサ","クサイハナ","ラフレシア","パラス","パラセクト","コンパン","モルフォン","ディグダ","ダグトリオ","ニャース","ペルシアン","コダック","ゴルダック","マンキー","オコリザル","ガーディ","ウインディ","ニョロモ","ニョロゾ","ニョロボン","ケーシィ","ユンゲラー","フーディン","ワンリキー","ゴーリキー","カイリキー","マダツボミ","ウツドン","ウツボット","メノクラゲ","ドククラゲ","イシツブテ","ゴローン","ゴローニャ","ポニータ","ギャロップ","ヤドン","ヤドラン","コイル","レアコイル","カモネギ","ドードー","ドードリオ","パウワウ","ジュゴン","ベトベター","ベトベトン","シェルダー","パルシェン","ゴース","ゴースト","ゲンガー","イワーク","スリープ","スリーパー","クラブ","キングラー","ビリリダマ","マルマイン","タマタマ","ナッシー","カラカラ","ガラガラ","サワムラー","エビワラー","ベロリンガ","ドガース","マタドガス","サイホーン","サイドン","ラッキー","モンジャラ","ガルーラ","タッツー","シードラ","トサキント","アズマオウ","ヒトデマン","スターミー","バリヤード","ストライク","ルージュラ","エレブー","ブーバー","カイロス","ケンタロス","コイキング","ギャラドス","ラプラス","メタモン","イーブイ","シャワーズ","サンダース","ブースター","ポリゴン","オムナイト","オムスター","カブト","カブトプス","プテラ","カビゴン","フリーザー","サンダー","ファイヤー","ミニリュウ","ハクリュー","カイリュー","ミュウツー","ミュウ","チコリータ","ベイリーフ","メガニウム","ヒノアラシ","マグマラシ","バクフーン","ワニノコ","アリゲイツ","オーダイル","オタチ","オオタチ","ホーホー","ヨルノズク","レディバ","レディアン","イトマル","アリアドス","クロバット","チョンチー","ランターン","ピチュー","ピィ","ププリン","トゲピー","トゲチック","ネイティ","ネイティオ","メリープ","モココ","デンリュウ","キレイハナ","マリル","マリルリ","ウソッキー","ニョロトノ","ハネッコ","ポポッコ","ワタッコ","エイパム","ヒマナッツ","キマワリ","ヤンヤンマ","ウパー","ヌオー","エーフィ","ブラッキー","ヤミカラス","ヤドキング","ムウマ","アンノーン","ソーナンス","キリンリキ","クヌギダマ","フォレトス","ノコッチ","グライガー","ハガネール","ブルー","グランブル","ハリーセン","ハッサム","ツボツボ","ヘラクロス","ニューラ","ヒメグマ","リングマ","マグマッグ","マグカルゴ","ウリムー","イノムー","サニーゴ","テッポウオ","オクタン","デリバード","マンタイン","エアームド","デルビル","ヘルガー","キングドラ","ゴマゾウ","ドンファン","ポリゴン２","オドシシ","ドーブル","バルキー","カポエラー","ムチュール","エレキッド","ブビィ","ミルタンク","ハピナス","ライコウ","エンテイ","スイクン","ヨーギラス","サナギラス","バンギラス","ルギア","ホウオウ","セレビィ","キモリ","ジュプトル","ジュカイン","アチャモ","ワカシャモ","バシャーモ","ミズゴロウ","ヌマクロー","ラグラージ","ポチエナ","グラエナ","ジグザグマ","マッスグマ","ケムッソ","カラサリス","アゲハント","マユルド","ドクケイル","ハスボー","ハスブレロ","ルンパッパ","タネボー","コノハナ","ダーテング","スバメ","オオスバメ","キャモメ","ペリッパー","ラルトス","キルリア","サーナイト","アメタマ","アメモース","キノココ","キノガッサ","ナマケロ","ヤルキモノ","ケッキング","ツチニン","テッカニン","ヌケニン","ゴニョニョ","ドゴーム","バクオング","マクノシタ","ハリテヤマ","ルリリ","ノズパス","エネコ","エネコロロ","ヤミラミ","クチート","ココドラ","コドラ","ボスゴドラ","アサナン","チャーレム","ラクライ","ライボルト","プラスル","マイナン","バルビート","イルミーゼ","ロゼリア","ゴクリン","マルノーム","キバニア","サメハダー","ホエルコ","ホエルオー","ドンメル","バクーダ","コータス","バネブー","ブーピッグ","パッチール","ナックラー","ビブラーバ","フライゴン","サボネア","ノクタス","チルット","チルタリス","ザングース","ハブネーク","ルナトーン","ソルロック","ドジョッチ","ナマズン","ヘイガニ","シザリガー","ヤジロン","ネンドール","リリーラ","ユレイドル","アノプス","アーマルド","ヒンバス","ミロカロス","ポワルン","カクレオン","カゲボウズ","ジュペッタ","ヨマワル","サマヨール","トロピウス","チリーン","アブソル","ソーナノ","ユキワラシ","オニゴーリ","タマザラシ","トドグラー","トドゼルガ","パールル","ハンテール","サクラビス","ジーランス","ラブカス","タツベイ","コモルー","ボーマンダ","ダンバル","メタング","メタグロス","レジロック","レジアイス","レジスチル","ラティアス","ラティオス","カイオーガ","グラードン","レックウザ","ジラーチ","デオキシス","ナエトル","ハヤシガメ","ドダイトス","ヒコザル","モウカザル","ゴウカザル","ポッチャマ","ポッタイシ","エンペルト","ムックル","ムクバード","ムクホーク","ビッパ","ビーダル","コロボーシ","コロトック","コリンク","ルクシオ","レントラー","スボミー","ロズレイド","ズガイドス","ラムパルド","タテトプス","トリデプス","ミノムッチ","ミノマダム","ガーメイル","ミツハニー","ビークイン","パチリス","ブイゼル","フローゼル","チェリンボ","チェリム","カラナクシ","トリトドン","エテボース","フワンテ","フワライド","ミミロル","ミミロップ","ムウマージ","ドンカラス","ニャルマー","ブニャット","リーシャン","スカンプー","スカタンク","ドーミラー","ドータクン","ウソハチ","マネネ","ピンプク","ペラップ","ミカルゲ","フカマル","ガバイト","ガブリアス","ゴンベ","リオル","ルカリオ","ヒポポタス","カバルドン","スコルピ","ドラピオン","グレッグル","ドクロッグ","マスキッパ","ケイコウオ","ネオラント","タマンタ","ユキカブリ","ユキノオー","マニューラ","ジバコイル","ベロベルト","ドサイドン","モジャンボ","エレキブル","ブーバーン","トゲキッス","メガヤンマ","リーフィア","グレイシア","グライオン","マンムー","ポリゴンＺ","エルレイド","ダイノーズ","ヨノワール","ユキメノコ","ロトム","ユクシー","エムリット","アグノム","ディアルガ","パルキア","ヒードラン","レジギガス","ギラティナ","クレセリア","フィオネ","マナフィ","ダークライ","シェイミ","アルセウス","ビクティニ","ツタージャ","ジャノビー","ジャローダ","ポカブ","チャオブー","エンブオー","ミジュマル","フタチマル","ダイケンキ","ミネズミ","ミルホッグ","ヨーテリー","ハーデリア","ムーランド","チョロネコ","レパルダス","ヤナップ","ヤナッキー","バオップ","バオッキー","ヒヤップ","ヒヤッキー","ムンナ","ムシャーナ","マメパト","ハトーボー","ケンホロウ","シママ","ゼブライカ","ダンゴロ","ガントル","ギガイアス","コロモリ","ココロモリ","モグリュー","ドリュウズ","タブンネ","ドッコラー","ドテッコツ","ローブシン","オタマロ","ガマガル","ガマゲロゲ","ナゲキ","ダゲキ","クルミル","クルマユ","ハハコモリ","フシデ","ホイーガ","ペンドラー","モンメン","エルフーン","チュリネ","ドレディア","バスラオ","メグロコ","ワルビル","ワルビアル","ダルマッカ","ヒヒダルマ","マラカッチ","イシズマイ","イワパレス","ズルッグ","ズルズキン","シンボラー","デスマス","デスカーン","プロトーガ","アバゴーラ","アーケン","アーケオス","ヤブクロン","ダストダス","ゾロア","ゾロアーク","チラーミィ","チラチーノ","ゴチム","ゴチミル","ゴチルゼル","ユニラン","ダブラン","ランクルス","コアルヒー","スワンナ","バニプッチ","バニリッチ","バイバニラ","シキジカ","メブキジカ","エモンガ","カブルモ","シュバルゴ","タマゲタケ","モロバレル","プルリル","ブルンゲル","ママンボウ","バチュル","デンチュラ","テッシード","ナットレイ","ギアル","ギギアル","ギギギアル","シビシラス","シビビール","シビルドン","リグレー","オーベム","ヒトモシ","ランプラー","シャンデラ","キバゴ","オノンド","オノノクス","クマシュン","ツンベアー","フリージオ","チョボマキ","アギルダー","マッギョ","コジョフー","コジョンド","クリムガン","ゴビット","ゴルーグ","コマタナ","キリキザン","バッフロン","ワシボン","ウォーグル","バルチャイ","バルジーナ","クイタラン","アイアント","モノズ","ジヘッド","サザンドラ","メラルバ","ウルガモス","コバルオン","テラキオン","ビリジオン","トルネロス","ボルトロス","レシラム","ゼクロム","ランドロス","キュレム","ケルディオ","メロエッタ","ゲノセクト","ハリマロン","ハリボーグ","ブリガロン","フォッコ","テールナー","マフォクシー","ケロマツ","ゲコガシラ","ゲッコウガ","ホルビー","ホルード","ヤヤコマ","ヒノヤコマ","ファイアロー","コフキムシ","コフーライ","ビビヨン","シシコ","カエンジシ","フラベベ","フラエッテ","フラージェス","メェークル","ゴーゴート","ヤンチャム","ゴロンダ","トリミアン","ニャスパー","ニャオニクス","ヒトツキ","ニダンギル","ギルガルド","シュシュプ","フレフワン","ペロッパフ","ペロリーム","マーイーカ","カラマネロ","カメテテ","ガメノデス","クズモー","ドラミドロ","ウデッポウ","ブロスター","エリキテル","エレザード","チゴラス","ガチゴラス","アマルス","アマルルガ","ニンフィア","ルチャブル","デデンネ","メレシー","ヌメラ","ヌメイル","ヌメルゴン","クレッフィ","ボクレー","オーロット","バケッチャ","パンプジン","カチコール","クレベース","オンバット","オンバーン","ゼルネアス","イベルタル","ジガルデ","ディアンシー","フーパ","ボルケニオン","モクロー","フクスロー","ジュナイパー","ニャビー","ニャヒート","ガオガエン","アシマリ","オシャマリ","アシレーヌ","ツツケラ","ケララッパ","ドデカバシ","ヤングース","デカグース","アゴジムシ","デンヂムシ","クワガノン","マケンカニ","ケケンカニ","オドリドリ","アブリー","アブリボン","イワンコ","ルガルガン","ヨワシ","ヒドイデ","ドヒドイデ","ドロバンコ","バンバドロ","シズクモ","オニシズクモ","カリキリ","ラランテス","ネマシュ","マシェード","ヤトウモリ","エンニュート","ヌイコグマ","キテルグマ","アマカジ","アママイコ","アマージョ","キュワワー","ヤレユータン","ナゲツケサル","コソクムシ","グソクムシャ","スナバァ","シロデスナ","ナマコブシ","タイプ：ヌル","シルヴァディ","メテノ","ネッコアラ","バクガメス","トゲデマル","ミミッキュ","ハギギシリ","ジジーロン","ダダリン","ジャラコ","ジャランゴ","ジャラランガ","カプ・コケコ","カプ・テテフ","カプ・ブルル","カプ・レヒレ","コスモッグ","コスモウム","ソルガレオ","ルナアーラ","ウツロイド","マッシブーン","フェローチェ","デンジュモク","テッカグヤ","カミツルギ","アクジキング","ネクロズマ","マギアナ","マーシャドー","ベベノム","アーゴヨン","ツンデツンデ","ズガドーン","ゼラオラ","メルタン","メルメタル","サルノリ","バチンキー","ゴリランダー","ヒバニー","ラビフット","エースバーン","メッソン","ジメレオン","インテレオン","ホシガリス","ヨクバリス","ココガラ","アオガラス","アーマーガア","サッチムシ","レドームシ","イオルブ","クスネ","フォクスライ","ヒメンカ","ワタシラガ","ウールー","バイウールー","カムカメ","カジリガメ","ワンパチ","パルスワン","タンドン","トロッゴン","セキタンザン","カジッチュ","アップリュー","タルップル","スナヘビ","サダイジャ","ウッウ","サシカマス","カマスジョー","エレズン","ストリンダー","ヤクデ","マルヤクデ","タタッコ","オトスパス","ヤバチャ","ポットデス","ミブリム","テブリム","ブリムオン","ベロバー","ギモー","オーロンゲ","タチフサグマ","ニャイキング","サニゴーン","ネギガナイト","バリコオル","デスバーン","マホミル","マホイップ","タイレーツ","バチンウニ","ユキハミ","モスノウ","イシヘンジン","コオリッポ","イエッサン","モルペコ","ゾウドウ","ダイオウドウ","パッチラゴン","パッチルドン","ウオノラゴン","ウオチルドン","ジュラルドン","ドラメシヤ","ドロンチ","ドラパルト","ザシアン","ザマゼンタ","ムゲンダイナ","ダクマ","ウーラオス","ザルード","レジエレキ","レジドラゴ","ブリザポス","レイスポス","バドレックス","アヤシシ","バサギリ","ガチグマ","イダイトウ","オオニューラ","ハリーマン","ラブトロス","ニャオハ","ニャローテ","マスカーニャ","ホゲータ","アチゲータ","ラウドボーン","クワッス","ウェルカモ","ウェーニバル","グルトン","パフュートン","タマンチュラ","ワナイダー","マメバッタ","エクスレッグ","パモ","パモット","パーモット","ワッカネズミ","イッカネズミ","パピモッチ","バウッツェル","ミニーブ","オリーニョ","オリーヴァ","イキリンコ","コジオ","ジオヅム","キョジオーン","カルボウ","グレンアルマ","ソウブレイズ","ズピカ","ハラバリー","カイデン","タイカイデン","オラチフ","マフィティフ","シルシュルー","タギングル","アノクサ","アノホラグサ","ノノクラゲ","リククラゲ","ガケガニ","カプサイジ","スコヴィラン","シガロコ","ベラカス","ヒラヒナ","クエスパトラ","カヌチャン","ナカヌチャン","デカヌチャン","ウミディグダ","ウミトリオ","オトシドリ","ナミイルカ","イルカマン","ブロロン","ブロロローム","モトトカゲ","ミミズズ","キラーメ","キラフロル","ボチ","ハカドッグ","カラミンゴ","アルクジラ","ハルクジラ","ミガルーサ","ヘイラッシャ","シャリタツ","コノヨザル","ドオー","リキキリン","ノココッチ","ドドゲザン","イダイナキバ","サケブシッポ","アラブルタケ","ハバタクカミ","チヲハウハネ","スナノケガワ","テツノワダチ","テツノツツミ","テツノカイナ","テツノコウベ","テツノドクガ","テツノイバラ","セビエ","セゴール","セグレイブ","コレクレー","サーフゴー","チオンジェン","パオジアン","ディンルー","イーユイ","トドロクツキ","テツノブジン","コライドン","ミライドン","ウネルミナモ","テツノイサハ","カミッチュ","チャデス","ヤバソチャ","イイネイヌ","マシマシラ","キチキギス","オーガポン","ブリジュラス","カミツオロチ","ウガツホムラ","タケルライコ","テツノイワオ","テツノカシラ","テラパゴス","モモワロウ"];
+
+// キラの背景（黄色い玉）の見本。build/make-bg.mjs で作る（手で編集しない）
+window.KC=window.KC||{};KC.BG='+v/4+v/4+f/3+P/3+fvw8+7S7uK+8+zQ+fzv+P71+P70+P7y+P7y+P7z9/7z+P71+P739/729v739/739f729v329/739v729/739v739P719v32+P3x+fvY+vvU+PvZ+PvY+PrS+fvT+P3r9v719/3z9/3v+Prf99xn99xh+PbZ9/ni9v3w9f709f/z9f/0+v/4+v/4+v/3+f719O7W6tWi69CY6tWi9fDN+f3i+f3e+fza+fva+f3j+P7u9/71+P/3+P/49//4+P/49//49//39/739/729/71+P7y9/70+P73+P7y+Pza+fvU+fzZ+vvZ+vvU+vzU+P7t9/709vbZ8+GL9thi98oh98cc9dNW8tp99vPP9f709f/09f/0+v/4+v/4+v/3+f308efH69Ca69CY6tCX8eWu+/3O+v3Q+vvR+vrO+fvS+f3k9/7y+P/3+P/39//49//49//3+P/39v739f719/fh9vDN+Pjh9/729/70+Pzj+fvU+fvV+vvU+fvS+fzc+P7x9v709/vo9N6D88AX9cAN9sAM88AX89Zt8+/M9v3z9f/09f/0+v/4+v/4+v/3+f729PDY7Nam7tKa7dSc9u66+/3S+v3W+vvX+vvW+vvU+frW+P3q+P/2+P/4+P/4+P/4+P/39v/49f/3+Pzv8+Oy9NeU9Oe7+f3y9/73+P7x+Pzi+PzY+fzW+P3d+P7t9/709v/19f7z+fzk8clB8rsN8rsM8cMu9Om59ffk9f709f/z9f/0+v/4+v/4+f/3+f73+Pzx9vHZ9OrJ9+7D+/nO+vzW+/zX+fvX+fzY+vvV+vnP+f3l9/72+P/4+P/3+P/4+P/49//39v/19v3w8+i989uh9erE9/709/70+P7v+f7t+P7t9/7t+P7w9v/09//09//09f/1+Pri6sE+8ctQ8cxO7ME99fHM9v3y9f709f/09f/0+v/4+v/4+f/3+f/2+P73+P71+P3z+vve+/jK+PPB9/C8+fTC+/nR+/vU+vjO+f3m9/73+P/3+P/39//2+P/19v/09f/09P719vvq9/bg9/vr9v7y+vzi+vbH+vfE+vzf9/7z9v/19v/19v/19//09f/19vrk9Ou39vnf9vni9e689Pjh9f719P7z9f/09f/0+v/4+v/4+v/4+f/3+P/4+P739/3z9/DL9OCg89uV89qT8tqY9eWt+vTE+vnR+f3r+P/3+P/3+P/2+P/1+P/09v/09f/09f/09f/19f/09f70+P3t+vW+/fS2/PKk+/W0+P3q9v709/719//19f/19f709f709/709f709v709f709f7z9f709P/09f/09f/0+v/4+v/4+f/4+f/3+P/39//3+Pjm8t6p89eR9NeP9NeR9Nyh9uGq9uau+fra9v70+P/2+P/1+P/1+P/1+P/0+P/09f/09f/09f/09f/09f/09/zn+/bC/vrd/ffH+/W5+Pzo9v719/709v/09v709f7y9f7y9f7z9f709f709f709f/09f/09f/09f/09f/0+v/4+f/4+P/4+P/4+P/49/739/DQ8diY9NeQ9NiQ9N2i+u/P+O3N9+m6+fvj9v729/72+P/3+P71+P71+P70+P70+P/0+P/09f/09f/09v709/3t+ffE/PjK+/S0+vfE+P3u9v719/719/7x9/rh9fbT9vfR9/rd9/3s9f7z9P/09f/09f/09f/09f/09f/0+v/4+P/4+P/4+P/4+P/4+P729u3I89mV89iP9NeQ9Nue+OnJ++3W8+Sw+Png9v719/729/719/719/7z9v7z9/7z+P7z+P/09f/09f/09f/z9f7z+P3p+fvX+fnQ+P3s9v719f709/3t+ffL9umf9eON9OOK8uib9fG+9vzn9f709f/09f/09f/09f/09f/0+f/4+P/4+P/4+P/4+P/49/739/LS8tuX9NiP9NeP9NeQ9Nqf9t2o89+m+Pnl9v729/72+P3w+fvg+fvX+Pza+P7s9/709f709f/09f/09v/z9v/09v709/7y9f7y9v709v719/3v+vfI/OuQ+ON/+OF/9uKC9OeV9e6y9PLB9v3v9f/z9f/z9f/09f/09f/0+f/4+P/4+P/4+P/3+P/39/73+Pro9OOt89iR9NeQ9NeQ9deU89mZ9Om+9/zw9v719/7v+vjM+fW1/Pet+/ah+vrH9v7v9f7z9f709f/09f/09f/09P/z9f/z9v/19v/19f70+fzl+u6e/OZ7+eN++OGA9+KE9Omh+vTN8+ih9/rg9f7z9f/09f/z9f/09f/0+f/4+P/4+P/4+P/4+P/49/739/71+PXf8+Ow89uc89qa8tyi9Oi++Pnp9v719v70+Pra/PSz/fjN/fnN/fKn+/Gm+Prb9P7x9f7y9f709f/19f/19P/y9f/19f/19//09v70+Pne9uaU+OJ/+OKC+eKE+OKG9+uq+/bV8+Sb9PLM9v7y9f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/49//39v/39/71+Pvr9/Ta9vLW9/bh+Pzv9/729/739/70+fnS/O+a/POx/fW3/e6W/PCb+PrQ8/7s9f7v9f/09f719f/09f/z9P/09f709v709f70+Pre9uaW9+GA+OGE+OWV+eyv/Pff/vzx+PDK9vTX9v7y9f/19f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/3+P/3+P/19/71+P709/7z9/72+P72+P/2+P72+frX/PCX/e+P/fCS/u+J/PKe9vvX9P7t9f7w9f709f709f7z9f7z9f7z9f7z9v709f7z+Pzm9euq9eKF+OKF+euq/PbU/vvz/v76/Prt+vvw9/709f/09f/z9f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/39//29//2+P72+P/29//3+P739/72+f3s+/i+/fSV/fSO/PWc+vO98vPn8/vw9P7w9P7w9P7w9f719v7t9/3h+Pzh9/3s9f7y9f3w9fbR8eec9+SH+uWH+eWQ/PDG/fnp+PTZ9/3y9f709P/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/49//49//4+P/4+P/3+P/39//4+P/49//4+P/3+P/39/71+P3r+vrR+fnE9/vT9fDh8Oni8vDc9Pjt9frw9P7w9P7q+fvJ/Peo/PSm+ffI9/3r9f709v3u9fbR9u2p+OmZ+eeZ+ey9/Prr9/vq9f7z9f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/49//4+P/2+P/39/729/739/709f3u9fzv9OHF8sie9NWt88nQ9Org9P3x9vnZ+fKj/PGO/PKc+/W8+Prb9f7z9f7z9v7y9/zo9/ne+Pnc+Pvo+P709f709f7z9f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/3+P/2+P729/729v709f718/3w7/De7dq+48274reb3MGh7+PM9fjq8Nm63c2T/fGc/vjD/frX+vvc9v7y9f7z9f/09f709f709f709P719f709P/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/29//3+P70+Pzo9/jV9vjZ8/nh7+/P6tug2rh83aVowbmJ1Mqp9O/U9NeP89mt+++Z+/Ox+vrW9/3p9f709f709f/z9P/z9P/z9P/09P/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/1+P72+P3u9++v9OFv9OFw9e2y8+e/6deS2rh72ZpzjJp4vK6J4s/H8eTV9fLg+PfN+fjR9/3m9/7t9f7x9f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/49v73+P70+Pvp9eSC99tQ99tR9OWM7ePM69+N6MeV151+uqNyzrqG6uDS9Ozh9PLo9fvm9v3X9v7n9v7w9v7x9f/z9f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/49v/39/729/zs9uiU9dxZ9txc9Oqf5uzO0trL6eeu2t2FwcaY48CS6ty98ubN8uq99vWz9/vH9v7p+P7v9v7w9f/z9f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/49//29/739f709/jY9e6x9ey09fbW5+O2t8mm7eqw3tyqn65138B/4bqA8uay8+qz8+OL9vDR9v7t+P7v9/7v9f/z9f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/29//09/719P709v7z9f3w8fPq6Mqq8td748lr8dZf37pb35GK2cmi8N+M9Oid8+Gj9fHQ+P3u+P7y9v7z9f/09f/09P/09f/09f/09f/09P/09P/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/39f/09f/09P/09P7y9P3v7fTn2tuo4MiM58OC4r6C26l21ph12ryb7c6X8+mi9/fQ9fzt9f7z9f7z9P/09f/z9f/09P/z9P/09f/09f/09P/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/49f/39f/09f/29f/09P7x8/3v8PPp7Ou6ztGCzcKHyK+Hy7N82LFx0q917NmQ896S9vLe9P7w9f/z9f7z9P/z9P/z9P/z9P/z9P/09f/09P/09P/z9f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/49f/09f/09v/09f/09f7z9f3w9Pvt8u2+4suH17+EzbB+z7SAz7Z6162I5LmG8eeq9PXq9f7v9P/z9P/z9P/z9P/z9P/z9P/09P/09P/09f/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/49f/09f/09f/19f/09f/09P7w9Pft5eqo5dKY1suX182P5cGF0bF72LKI3bOG6evK9Pzv9P7z9P/z9P/z9P/z9P/z9P/09P/09P/09P/09P/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/49f/09f/09f/09f/09f7z9Pnt6daq3r6r3cCm5L2V4cCH3r6p47WW2r+u8+/h9P3w9P7y9P/z9P/z9P/z9P/z9P/09P/09P/09P/09f/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/49f/49//39f/19f/09f/09f709fzw8NrD3Z2l1qGl3qSh462g3qmf06az5ena9Pvv9P7x9P7z9P/z9P/z9P/z9P/09P/09P/09P/09P/09f/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/49//3+P/39//39//39f/09f709P7w9Pjp69bV6eXO9Pfr8vTm6uDJ7ubP8/zv9P7w9P7z9P/z9P/09f/09P/09P/09P/09P/09P/09P/09f/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/3+P/3+P/3+P/39//19f/09f709f3x9f3w9v3z9v709f709P3w9P3w9P7w9P/z9f/09f/09f/09f/09f/09f/09P/09P/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/3+P/3+P/2+P/2+P/1+P/19//19/719/719f719f709f709f709f709f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/3+P/2+P/2+P/2+P/1+P/19//19//19v/19f/19f/19f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/0+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/4+P/2+P/19//19//1+P/1+P/29//19//19//09//19f/09f/09f/09f/09f/09f/09f/09f/09f/09P/09P/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/09f/0';
+
+// スクショの読み取り（画面に触らない）。
+// ポケモンGOの一覧は3列。名前の下の緑の線を目印にマスを探し、背景の黄色い玉でキラかを見分け、絵を切り抜く。
+// 位置はすべて「画面の幅 W に対する割合」で決める（スマホごとに画像の大きさが違うため）。
+window.KC = window.KC || {};
+KC.scan = (() => {
+  const COLS = [0.184, 0.5, 0.816];   // 3列の中心
+  const ROW = 0.361;                  // 1段の高さ
+  // 切り抜く絵の範囲（線の上端からの位置）
+  const CROP = { dx: 0.12, top: 0.245, bottom: 0.065 };
+  const IMG_W = 128, IMG_H = 96;      // 保存する絵の大きさ
+  const FW = 48, FH = 36;             // 見比べるときの大きさ
+
+  // 緑の線（約 110,236,185）
+  const isBar = (r, g, b) => g > 200 && g - r > 70 && b > 140 && b < 220 && g - b > 25;
+
+  // 線を探して、マス（列・線の高さ）の一覧を返す
+  function findCells(d, W, H) {
+    const segs = [];
+    for (let y = 0; y < H; y++) {
+      let s = -1;
+      for (let x = 0; x <= W; x++) {
+        const i = (y * W + x) * 4;
+        const on = x < W && isBar(d[i], d[i + 1], d[i + 2]);
+        if (on && s < 0) s = x;
+        if (!on && s >= 0) { if (x - s > W * 0.08) segs.push([y, s, x]); s = -1; }
+      }
+    }
+    const bars = [];
+    for (const [y, s, e] of segs) {
+      const c = (s + e) / 2;
+      const f = bars.find(q => Math.abs(q.c - c) < W * 0.05 && y - q.y1 <= 2);
+      if (f) f.y1 = y; else bars.push({ y0: y, y1: y, c });
+    }
+    // 同じ段の線をまとめる。線がボタンに隠れた列も、段があればマスとして調べる
+    const rows = [];
+    for (const b of bars) {
+      const r = rows.find(q => Math.abs(q.y - b.y0) < W * 0.03);
+      if (r) r.y = Math.min(r.y, b.y0); else rows.push({ y: b.y0 });
+    }
+    rows.sort((a, b) => a.y - b.y);
+    const cells = [];
+    for (const r of rows) {
+      if (r.y - W * (CROP.top + 0.02) < 0) continue;   // 絵が上で切れている段は飛ばす
+      COLS.forEach((cx, col) => cells.push({ col, cx: cx * W, by: r.y }));
+    }
+    return cells;
+  }
+
+  // 背景の黄色い玉（左上と右上の大きな玉）の場所で、黄色っぽい点の割合を測る
+  function yellowRatio(d, W, H, cx, cy, rr) {
+    let n = 0, t = 0;
+    for (let y = Math.round(cy - rr); y <= cy + rr; y++) {
+      for (let x = Math.round(cx - rr); x <= cx + rr; x++) {
+        if ((x - cx) ** 2 + (y - cy) ** 2 > rr * rr || x < 0 || y < 0 || x >= W || y >= H) continue;
+        t++;
+        const i = (y * W + x) * 4;
+        if (d[i] > 215 && d[i + 1] > 160 && d[i] - d[i + 2] > 45) n++;
+      }
+    }
+    return t ? n / t : 0;
+  }
+  function isLucky(d, W, H, cell) {
+    const r = W * 0.02;
+    const a = yellowRatio(d, W, H, cell.cx - 0.069 * W, cell.by - 0.2 * W, r);
+    const b = yellowRatio(d, W, H, cell.cx + 0.071 * W, cell.by - 0.184 * W, r);
+    return a > 0.5 && b > 0.4;
+  }
+
+  // マスの絵を IMG_W×IMG_H に切り抜いた canvas
+  function cropCell(src, W, cell) {
+    const c = document.createElement('canvas');
+    c.width = IMG_W; c.height = IMG_H;
+    const g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    const sx = cell.cx - CROP.dx * W, sy = cell.by - CROP.top * W;
+    const sw = CROP.dx * 2 * W, sh = (CROP.top - CROP.bottom) * W;
+    g.drawImage(src, sx, sy, sw, sh, 0, 0, IMG_W, IMG_H);
+    return c;
+  }
+  // 名前の部分（文字読み取りのヒント用）
+  function cropName(src, W, cell) {
+    const sw = 0.31 * W, sh = 0.05 * W;
+    const c = document.createElement('canvas');
+    c.width = Math.round(sw); c.height = Math.round(sh);
+    c.getContext('2d').drawImage(src, cell.cx - sw / 2, cell.by - 0.058 * W, sw, sh, 0, 0, c.width, c.height);
+    return c;
+  }
+
+  // 見比べ用の特徴（FW×FH の色）。右上のお気に入りの星は付いたり付かなかったりするので使わない
+  function feature(canvasOrImg) {
+    const c = document.createElement('canvas');
+    c.width = FW; c.height = FH;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(canvasOrImg, 0, 0, FW, FH);
+    const d = g.getImageData(0, 0, FW, FH).data;
+    const f = new Float32Array(FW * FH * 3);
+    for (let i = 0, j = 0; i < d.length; i += 4, j += 3) { f[j] = d[i]; f[j + 1] = d[i + 1]; f[j + 2] = d[i + 2]; }
+    return f;
+  }
+  const MASK = (() => {
+    const m = new Uint8Array(FW * FH);
+    for (let y = 0; y < FH; y++) for (let x = 0; x < FW; x++) m[y * FW + x] = (x > FW * 0.72 && y < FH * 0.22) ? 0 : 1;
+    return m;
+  })();
+  const diff3 = (a, i, b, j) => Math.abs(a[i] - b[j]) + Math.abs(a[i + 1] - b[j + 1]) + Math.abs(a[i + 2] - b[j + 2]);
+  // キラの背景（黄色い玉）の見本。bg.js で KC.BG（FW×FH×3）を入れる。無ければ背景を区別しない
+  let BG = null;
+  const bg = () => {
+    if (!BG && KC.BG) BG = Uint8Array.from(atob(KC.BG), c => c.charCodeAt(0));
+    return BG;
+  };
+  // 背景と違う点（ポケモン本体）の印
+  function foreground(f) {
+    const t = bg(), m = new Uint8Array(FW * FH);
+    for (let p = 0; p < FW * FH; p++) m[p] = MASK[p] && (!t || diff3(f, p * 3, t, p * 3) > 70) ? 1 : 0;
+    return m;
+  }
+  // 2つの絵の違い（0 = 同じ、1 = 全部違う）。本体の点のうち、色がはっきり違う点の割合。
+  // 少しのずれは許すため、上下左右1マスずらした中で一番小さい値
+  function distance(a, b) {
+    const ma = a.fg || (a.fg = foreground(a)), mb = b.fg || (b.fg = foreground(b));
+    let best = Infinity;
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        let s = 0, n = 0;
+        for (let y = 1; y < FH - 1; y++) {
+          for (let x = 1; x < FW - 1; x++) {
+            const p = y * FW + x, q = (y + oy) * FW + x + ox;
+            if (!ma[p] && !mb[q]) continue;
+            n++;
+            if (diff3(a, p * 3, b, q * 3) > 70) s++;
+          }
+        }
+        best = Math.min(best, n ? s / n : 0);
+      }
+    }
+    return best;
+  }
+  // 試しのスクショでは、同じ絵は 0.1 以下、別の衣装は 0.3 以上（2026-11-05 測定）
+  const SAME = 0.2;    // これより小さければ同じ絵とみなす
+  const NEAR = 0.45;   // これより小さければ候補として先に出す
+
+  // 1枚のスクショを読む → [{lucky, canvas, nameCanvas, col, by}]
+  async function readImage(blob) {
+    const im = await createImageBitmap(blob);
+    const W = im.width, H = im.height;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(im, 0, 0);
+    const d = g.getImageData(0, 0, W, H).data;
+    const out = [];
+    for (const cell of findCells(d, W, H)) {
+      out.push({ ...cell, lucky: isLucky(d, W, H, cell), canvas: cropCell(c, W, cell), nameCanvas: cropName(c, W, cell) });
+    }
+    im.close && im.close();
+    return out;
+  }
+
+  return { findCells, isLucky, readImage, feature, distance, foreground, SAME, NEAR, IMG_W, IMG_H, FW, FH };
+})();
+
+// 名前の文字を読んで、種族の候補を出す（ヒント用。読めなくても困らない作り）。
+// 文字読み取りは無料の Tesseract.js を、必要になったときだけ読み込む。
+window.KC = window.KC || {};
+KC.ocr = (() => {
+  const LIB = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+  let workerP = null;
+
+  function loadLib() {
+    if (window.Tesseract) return Promise.resolve();
+    return new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = LIB; s.onload = res; s.onerror = () => rej(new Error('文字読み取りの部品を読み込めませんでした'));
+      document.head.appendChild(s);
+    });
+  }
+  function worker() {
+    if (!workerP) {
+      workerP = loadLib().then(() => Tesseract.createWorker('jpn')).catch(e => { workerP = null; throw e; });
+    }
+    return workerP;
+  }
+
+  // 文字を読みやすく：2倍に広げて白黒にする（名前は灰色の字、背景は明るい）
+  function prep(src) {
+    const c = document.createElement('canvas');
+    c.width = src.width * 2; c.height = src.height * 2;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(src, 0, 0, c.width, c.height);
+    const im = g.getImageData(0, 0, c.width, c.height), d = im.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const v = (d[i] + d[i + 1] + d[i + 2]) / 3 < 150 ? 0 : 255;
+      d[i] = d[i + 1] = d[i + 2] = v;
+    }
+    g.putImageData(im, 0, 0);
+    return c;
+  }
+
+  // 比べやすい形にする：カタカナとー以外を消し（♂♀はひらがなに読み違えやすいので消える）、
+  // 濁点・半濁点と小さい字を区別しない（読み取りでよく取り違えるため）
+  const SMALL = { 'ァ': 'ア', 'ィ': 'イ', 'ゥ': 'ウ', 'ェ': 'エ', 'ォ': 'オ', 'ッ': 'ツ', 'ャ': 'ヤ', 'ュ': 'ユ', 'ョ': 'ヨ', 'ヮ': 'ワ' };
+  function norm(s) {
+    return String(s || '').replace(/[^ァ-ヺー]/g, '')
+      .normalize('NFD').replace(/[゙゚]/g, '')
+      .replace(/[ァィゥェォッャュョヮ]/g, ch => SMALL[ch]);
+  }
+  // 入力欄で名前を探す用（ひらがなもカタカナにしてから比べる）
+  const kana = s => String(s || '').replace(/[ぁ-ゖ]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+  function lev(a, b) {
+    const m = a.length, n = b.length, d = Array.from({ length: m + 1 }, (_, i) => [i]);
+    for (let j = 1; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    return d[m][n];
+  }
+  let NORM = null;
+  // 読んだ文字 → 種族の図鑑番号の候補（よく合う順・最大5つ）。
+  // sure：名前がそのまま読めて1つに決まったとき（最初から入れておいてよい）
+  function guessEx(text) {
+    const t = norm(text);
+    if (t.length < 2) return { ids: [], sure: false };
+    NORM = NORM || KC.NAMES.map(norm);
+    const ids = test => NORM.map((n, i) => test(n) ? i + 1 : 0).filter(Boolean);
+    // 1) そのまま同じ
+    const hit = ids(n => n === t);
+    if (hit.length) return { ids: hit.slice(0, 5), sure: hit.length === 1 };
+    // 2) 名前のうしろに余分な字（性別・数字の読み違い）が付いている → 一番長く合う名前
+    const pre = ids(n => n.length >= 3 && t.startsWith(n));
+    if (pre.length) {
+      const L = Math.max(...pre.map(i => NORM[i - 1].length));
+      const best = pre.filter(i => NORM[i - 1].length === L);
+      return { ids: best.slice(0, 5), sure: best.length === 1 };
+    }
+    return { ids: fuzzy(t), sure: false };
+  }
+  const guess = text => guessEx(text).ids;
+  function fuzzy(t) {
+    // 3) 「リザ」のような短いニックネーム → 頭が合う名前（短い順）／4) 少し違う名前
+    const sc = [];
+    NORM.forEach((n, i) => {
+      const head = n.startsWith(t) ? 0.3 + n.length / 100 : 9;
+      const r = Math.min(head, lev(t, n) / Math.max(t.length, n.length));
+      if (r <= 0.4) sc.push([r, i + 1]);
+    });
+    return sc.sort((a, b) => a[0] - b[0]).slice(0, 5).map(x => x[1]);
+  }
+  // 入力欄の候補：ひらがな・カタカナどちらでも、頭が合う名前→途中に含む名前
+  function search(q, max = 8) {
+    const t = kana(q).trim();
+    if (!t) return [];
+    const a = [], b = [];
+    KC.NAMES.forEach((n, i) => { if (n.startsWith(t)) a.push(i + 1); else if (n.includes(t)) b.push(i + 1); });
+    return [...a, ...b].slice(0, max);
+  }
+
+  // canvas の一覧を読む → 文字の一覧（失敗したら空の文字）
+  async function readAll(canvases, onProgress) {
+    let w;
+    try { w = await worker(); } catch { return canvases.map(() => ''); }
+    const out = [];
+    for (let i = 0; i < canvases.length; i++) {
+      try { out.push((await w.recognize(prep(canvases[i]))).data.text.trim()); } catch { out.push(''); }
+      onProgress && onProgress(i + 1, canvases.length);
+    }
+    return out;
+  }
+
+  return { readAll, guess, guessEx, search, norm };
+})();
+
+// Google 側とのやりとりと、手元に持つデータ（state）。
+// 絵は一度もらったら変わらないので、端末の localStorage に覚えておき、次からはもらわない。
+window.KC = window.KC || {};
+KC.api = (() => {
+  const state = { people: ['A', 'B'], variants: new Map(), owned: { a: new Set(), b: new Set() }, log: [] };
+  const imgs = new Map();      // id → 絵（data URL）
+  const feats = new Map();     // id → 見比べ用の特徴
+
+  // 保存場所（Google のウェブアプリ）の URL。家族に送るリンクの「#」のあとに入っている
+  //（#AKfy… でも #https://script.google.com/macros/s/AKfy…/exec でもよい）。一度来たら端末に覚える
+  const KEY = 'kc-gas';
+  function gasUrl() {
+    if (window.KC_GAS_URL) return window.KC_GAS_URL;   // 試し版（にせ Google）
+    let h = '';
+    try { h = decodeURIComponent(location.hash.slice(1)).trim(); } catch { /* 変な # は無視 */ }
+    const m = h.match(/^(?:https:\/\/script\.google\.com\/macros\/s\/)?([\w-]{20,})(?:\/exec)?\/?$/);
+    let id = m ? m[1] : null;
+    try {
+      if (id) localStorage.setItem(KEY, id);
+      else id = localStorage.getItem(KEY);
+    } catch { /* 覚えられない端末でも # があれば動く */ }
+    if (!id) throw new Error('リンクの # のあとに Google の URL がありません');
+    return `https://script.google.com/macros/s/${id}/exec`;
+  }
+
+  // Google を呼ぶ。中身を文字（text/plain）で送ると、ブラウザの事前確認なしで別のサイトへ送れる
+  async function call(name, ...args) {
+    const url = gasUrl();
+    let r;
+    try {
+      r = await fetch(url, { method: 'POST', body: JSON.stringify({ f: name, a: args }) });
+    } catch (e) {
+      throw new Error('Google につながりません（電波か、公開の「アクセスできるユーザー」が全員か）');
+    }
+    if (!r.ok) throw new Error('Google につながりません（' + r.status + '）');
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.e);
+    return j.v;
+  }
+
+  function setMeta(m) {
+    state.people = m.people;
+    state.variants = new Map(m.variants.map(([id, no]) => [id, { id, no }]));
+    state.owned = { a: new Set(m.owned.a), b: new Set(m.owned.b) };
+    state.log = m.log;
+    return state;
+  }
+  const load = async () => setMeta(await call('api_meta'));
+
+  // 絵の覚え場所（IndexedDB。localStorage より多く入る）。使えない端末では毎回もらう
+  let dbp = null;
+  function idb() {
+    if (!dbp) {
+      dbp = new Promise(res => {
+        try {
+          const r = indexedDB.open('kira-check', 1);
+          r.onupgradeneeded = () => r.result.createObjectStore('img');
+          r.onsuccess = () => res(r.result);
+          r.onerror = () => res(null);
+        } catch { res(null); }
+      });
+    }
+    return dbp;
+  }
+  async function idbGet(ids) {
+    const db = await idb();
+    if (!db || !ids.length) return;
+    await new Promise(res => {
+      try {
+        const st = db.transaction('img').objectStore('img');
+        let left = ids.length;
+        ids.forEach(id => {
+          const q = st.get(id);
+          q.onsuccess = () => { if (q.result) imgs.set(id, q.result); if (!--left) res(); };
+          q.onerror = () => { if (!--left) res(); };
+        });
+      } catch { res(); }
+    });
+  }
+  async function idbPut(pairs) {
+    const db = await idb();
+    if (!db || !pairs.length) return;
+    try {
+      const st = db.transaction('img', 'readwrite').objectStore('img');
+      pairs.forEach(([id, v]) => st.put(v, id));
+    } catch { /* いっぱいなら覚えない */ }
+  }
+
+  // 足りない絵をそろえる（端末の覚え場所 → 無ければ Google からまとめてもらう）
+  async function fetchImages(ids) {
+    await idbGet(ids.filter(id => !imgs.has(id)));
+    const need = ids.filter(id => !imgs.has(id));
+    for (let i = 0; i < need.length; i += 80) {
+      const got = Object.entries(await call('api_images', need.slice(i, i + 80)));
+      got.forEach(([id, v]) => imgs.set(id, v));
+      await idbPut(got);
+    }
+  }
+  const img = id => imgs.get(id) || '';
+  function remember(id, dataUrl) {
+    imgs.set(id, dataUrl);
+    idbPut([[id, dataUrl]]);
+  }
+
+  // 絵の特徴（見比べ用）。絵を読み込んでから計算する
+  async function feature(id) {
+    if (feats.has(id)) return feats.get(id);
+    const src = img(id);
+    if (!src) return null;
+    const im = new Image();
+    im.src = src;
+    await im.decode();
+    const f = KC.scan.feature(im);
+    feats.set(id, f);
+    return f;
+  }
+
+  // 変える操作。どれも新しい一覧を受け取って state を直す
+  const add = async (p, items) => { const r = await call('api_add', p, items); setMeta(r.meta); return r; };
+  const remove = async (p, vids) => setMeta(await call('api_remove', p, vids));
+  const setNo = async (vid, no) => setMeta(await call('api_setNo', vid, no));
+  const merge = async (from, into) => { const r = setMeta(await call('api_merge', from, into)); feats.delete(from); return r; };
+  const setPeople = async names => setMeta(await call('api_people', names));
+
+  return { state, load, fetchImages, img, remember, feature, add, remove, setNo, merge, setPeople };
+})();
+
+// 画面の共通部分：タブ・「戻す」の帯・種族を選ぶ欄・設定・起動
+window.KC = window.KC || {};
+KC.ui = (() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const name = no => KC.NAMES[no - 1] || '?';
+  const S = () => KC.api.state;
+
+  // 指2本・ダブルタップで拡大させない（iPhone は viewport の指定だけでは止まらない）
+  function noZoom() {
+    ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+    document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+    let last = 0;
+    document.addEventListener('touchend', e => {
+      const now = Date.now();
+      if (now - last < 300 && !e.target.closest('input')) e.preventDefault();
+      last = now;
+    }, { passive: false });
+  }
+
+  function tabs() {
+    $('tabs').addEventListener('click', e => {
+      const b = e.target.closest('button[data-tab]');
+      if (!b) return;
+      document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+      document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'page-' + b.dataset.tab));
+    });
+  }
+
+  // 下の帯：最後にしたこと（前→今）と「戻す」。次の操作まで出しておく
+  let undoFn = null;
+  function note(text, fn, err) {
+    undoFn = fn || null;
+    $('undo-text').textContent = text;
+    $('undo').classList.add('on');
+    $('undo').classList.toggle('err', !!err);
+    $('undo-btn').style.display = fn ? '' : 'none';
+  }
+  function fail(e) { note('できませんでした：' + ((e && e.message) || e), null, true); }
+  async function busy(fn) {
+    $('loadbar').classList.add('busy');
+    try { return await fn(); } catch (e) { fail(e); return null; } finally { $('loadbar').classList.remove('busy'); }
+  }
+
+  // 2人の名前を画面のあちこちに入れる
+  function names() {
+    const [a, b] = S().people;
+    document.querySelectorAll('.pa').forEach(el => { el.textContent = el.closest('#filter') ? a + '×' : a; el.title = a; });
+    document.querySelectorAll('.pb').forEach(el => { el.textContent = el.closest('#filter') ? b + '×' : b; el.title = b; });
+    if (document.activeElement !== $('name-a')) $('name-a').value = a;
+    if (document.activeElement !== $('name-b')) $('name-b').value = b;
+  }
+  const pname = p => S().people[p === 'a' ? 0 : 1];
+
+  function log() {
+    const f = t => { const d = new Date(t); return isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
+    $('log').innerHTML = S().log.map(([t, s]) => `<div><time>${f(t)}</time><span>${esc(s)}</span></div>`).join('');
+  }
+
+  // 絵の src を、手元にある分だけ入れる
+  function fillImages(root = document) {
+    root.querySelectorAll('img[data-vid]').forEach(im => {
+      if (im.getAttribute('src')) return;
+      const v = KC.api.img(im.dataset.vid);
+      if (v) im.src = v;
+    });
+  }
+
+  // 種族を選ぶ欄。cands()：入力が空のときの候補 [{vid}|{no}]。onChange(sel)：sel は {no, vid?} か null
+  function picker(host, { cands = () => [], onChange = () => {}, value = null } = {}) {
+    host.innerHTML = '<input type="text" autocomplete="off" placeholder="種族"><div class="pop" hidden></div>';
+    const inp = host.querySelector('input'), pop = host.querySelector('.pop');
+    let sel = value;
+    const show = () => {
+      const q = inp.value.trim();
+      let list;
+      if (!q || (sel && q === name(sel.no))) list = cands();
+      else {
+        const nos = KC.ocr.search(q, 8);
+        list = nos.map(no => ({ no }));
+        // 1番目の種族に台帳の絵があれば、その絵も出す（同じ絵ならそれを選べる）
+        if (nos.length) for (const v of S().variants.values()) if (v.no === nos[0]) list.push({ vid: v.id, no: v.no });
+      }
+      pop.innerHTML = list.map(c => c.vid
+        ? `<button data-vid="${esc(c.vid)}" data-no="${c.no}"><span class="th sm"><img data-vid="${esc(c.vid)}" alt=""></span>${esc(name(c.no))}</button>`
+        : `<button data-no="${c.no}">${esc(name(c.no))}</button>`).join('');
+      fillImages(pop);
+      pop.hidden = !list.length;
+    };
+    const set = (s, quiet) => {
+      sel = s;
+      inp.value = s ? name(s.no) : '';
+      host.classList.toggle('vid', !!(s && s.vid));
+      if (!quiet) onChange(sel);
+    };
+    inp.addEventListener('focus', show);
+    inp.addEventListener('input', () => {
+      // 名前をそのまま打ち終えたら、それを選んだことにする
+      const i = KC.NAMES.indexOf(inp.value.trim());
+      sel = i >= 0 ? { no: i + 1 } : null;
+      onChange(sel);
+      show();
+    });
+    inp.addEventListener('blur', () => setTimeout(() => { pop.hidden = true; }, 120));
+    pop.addEventListener('pointerdown', e => e.preventDefault());   // 入力欄のフォーカスを外さない
+    pop.addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      set(b.dataset.vid ? { vid: b.dataset.vid, no: +b.dataset.no } : { no: +b.dataset.no });
+      pop.hidden = true;
+      inp.blur();
+    });
+    set(value, true);
+    return { get: () => sel, set };
+  }
+
+  function settings() {
+    $('save-names').addEventListener('click', () => busy(async () => {
+      const before = S().people.join('・');
+      await KC.api.setPeople([$('name-a').value, $('name-b').value]);
+      refresh();
+      note(`名前：${before} → ${S().people.join('・')}`);
+    }));
+  }
+
+  // 一覧・名前・記録を描き直す
+  function refresh() {
+    names();
+    log();
+    KC.list.render();
+    KC.scanUi.render();
+  }
+
+  async function boot() {
+    noZoom();
+    tabs();
+    settings();
+    KC.list.init();
+    KC.scanUi.init();
+    $('undo-btn').addEventListener('click', async () => {
+      const fn = undoFn;
+      if (!fn) return;
+      $('undo').classList.remove('on');
+      undoFn = null;
+      await busy(fn);
+    });
+    await busy(async () => {
+      await KC.api.load();
+      refresh();
+      await KC.api.fetchImages([...S().variants.keys()]);
+      fillImages();
+    });
+  }
+
+  return { $, esc, name, pname, note, fail, busy, fillImages, picker, refresh, boot };
+})();
+
+// 一覧の画面（検索もここ）と、絵をたっぷり見る画面（種族を直す・同じ絵をまとめる）
+window.KC = window.KC || {};
+KC.list = (() => {
+  const U = () => KC.ui;
+  const S = () => KC.api.state;
+  let filter = 'all';
+
+  function rowHtml(v) {
+    const { esc, name } = U(), o = S().owned;
+    const mk = p => `<button class="mk${o[p].has(v.id) ? ' on' : ''}" data-p="${p}">${o[p].has(v.id) ? '○' : '×'}</button>`;
+    return `<div class="vrow" data-vid="${esc(v.id)}"><span class="th"><img data-vid="${esc(v.id)}" alt=""></span><span class="nm">${esc(name(v.no))}</span>${mk('a')}${mk('b')}</div>`;
+  }
+
+  function render() {
+    const { $, esc, name, fillImages } = U();
+    const q = $('q').value.trim();
+    const hitNos = q ? new Set(KC.ocr.search(q, 60)) : null;
+    const o = S().owned;
+    const vs = [...S().variants.values()]
+      .filter(v => !hitNos || hitNos.has(v.no))
+      .filter(v => filter === 'all' || !o[filter].has(v.id))
+      .sort((a, b) => a.no - b.no || (a.id < b.id ? -1 : 1));
+    let html = vs.map(rowHtml).join('');
+    // 検索した種族で、台帳に絵がないもの（まだ誰もキラを持っていない）
+    if (hitNos && filter === 'all') {
+      const has = new Set(vs.map(v => v.no));
+      html += [...hitNos].filter(no => !has.has(no)).slice(0, 20)
+        .map(no => `<div class="vrow none"><span class="th"></span><span class="nm">${esc(name(no))}</span><button class="mk" disabled>×</button><button class="mk" disabled>×</button></div>`).join('');
+    }
+    $('list').innerHTML = html;
+    fillImages($('list'));
+  }
+
+  // ○ と × を切り替える（戻せるので確認はしない）
+  async function toggle(vid, p) {
+    const { busy, note, name, pname } = U();
+    const v = S().variants.get(vid);
+    const had = S().owned[p].has(vid);
+    await busy(async () => {
+      if (had) await KC.api.remove(p, vid); else await KC.api.add(p, [{ vid }]);
+      U().refresh();
+      const back = async () => {
+        if (had) await KC.api.add(p, [{ vid }]); else await KC.api.remove(p, vid);
+        U().refresh();
+        note(`${pname(p)}：${name(v.no)} ${had ? '×→○' : '○→×'}`);
+      };
+      note(`${pname(p)}：${name(v.no)} ${had ? '○→×' : '×→○'}`, back);
+    });
+  }
+
+  // 絵をたっぷり見る画面
+  let cur = null, pick = null;
+  function open(vid) {
+    const { $, esc, picker, fillImages } = U();
+    const v = S().variants.get(vid);
+    if (!v) return;
+    cur = vid;
+    $('sh-img').src = KC.api.img(vid);
+    pick = picker($('sh-picker'), { value: { no: v.no } });
+    const others = [...S().variants.values()].filter(x => x.no === v.no && x.id !== vid);
+    $('sh-merge').innerHTML = others.length
+      ? '<span>同じ絵としてまとめる</span>' + others.map(x => `<img data-vid="${esc(x.id)}" data-into="${esc(x.id)}" alt="" title="この絵にまとめる">`).join('')
+      : '';
+    fillImages($('sh-merge'));
+    $('sheet').hidden = false;
+  }
+  const close = () => { U().$('sheet').hidden = true; cur = null; };
+
+  function init() {
+    const { $, busy, note, name } = U();
+    $('q').addEventListener('input', render);
+    $('filter').addEventListener('click', e => {
+      const b = e.target.closest('button[data-f]');
+      if (!b) return;
+      filter = b.dataset.f;
+      $('filter').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      render();
+    });
+    $('list').addEventListener('click', e => {
+      const row = e.target.closest('.vrow[data-vid]');
+      if (!row) return;
+      const mk = e.target.closest('.mk');
+      if (mk && !mk.disabled) toggle(row.dataset.vid, mk.dataset.p);
+      else if (e.target.closest('.th')) open(row.dataset.vid);
+    });
+    $('sh-close').addEventListener('click', close);
+    $('sheet').addEventListener('click', e => { if (e.target === $('sheet')) close(); });
+    $('sh-save').addEventListener('click', () => {
+      const vid = cur, s = pick && pick.get(), v = S().variants.get(vid);
+      const into = $('sh-merge').querySelector('img.sel');
+      if (v && into) {
+        // まとめると元の絵は台帳から消えるので戻せない（タップで選んで保存、の2段階にしている）
+        close();
+        busy(async () => {
+          await KC.api.merge(vid, into.dataset.into);
+          U().refresh();
+          note(`${name(v.no)}：絵を1つまとめました`);
+        });
+        return;
+      }
+      if (!v || !s || s.no === v.no) { close(); return; }
+      const before = v.no;
+      close();
+      busy(async () => {
+        await KC.api.setNo(vid, s.no);
+        U().refresh();
+        note(`種族：${name(before)} → ${name(s.no)}`, async () => { await KC.api.setNo(vid, before); U().refresh(); });
+      });
+    });
+    // まとめ先をタップで選ぶ（もう一度タップで外す）
+    $('sh-merge').addEventListener('click', e => {
+      const im = e.target.closest('img[data-into]');
+      if (!im) return;
+      const on = !im.classList.contains('sel');
+      $('sh-merge').querySelectorAll('img').forEach(x => x.classList.remove('sel'));
+      im.classList.toggle('sel', on);
+    });
+  }
+
+  return { init, render, open };
+})();
+
+// 取り込みの画面：スクショを読む → 台帳の絵と見比べる → 確認の表 → 追加
+window.KC = window.KC || {};
+KC.scanUi = (() => {
+  const U = () => KC.ui;
+  const S = () => KC.api.state;
+  let who = 'a';
+  let entries = [];   // 読んだキラの絵（同じ絵は1つ）：{dataUrl, feat, vid, nameCanvas, cand:{vids,nos}, sel, on}
+  let done = null;    // 最後の追加：{who, before, after, added}
+  let running = false;
+
+  async function featOf(dataUrl) {
+    const im = new Image();
+    im.src = dataUrl;
+    await im.decode();
+    return KC.scan.feature(im);
+  }
+  const prog = r => { U().$('progress').firstElementChild.style.width = Math.round(r * 100) + '%'; };
+
+  async function read(files) {
+    const { $ } = U();
+    running = true;
+    $('add').disabled = true;
+    $('pick').classList.add('disabled');
+    try {
+      prog(0.02);
+      // 台帳の絵の特徴をそろえる
+      const ids = [...S().variants.keys()];
+      await KC.api.fetchImages(ids);
+      const known = [];
+      for (const id of ids) { const f = await KC.api.feature(id); if (f) known.push([id, f]); }
+      const fresh = [];
+      for (let k = 0; k < files.length; k++) {
+        const cells = (await KC.scan.readImage(files[k])).filter(c => c.lucky);
+        for (const c of cells) {
+          const dataUrl = c.canvas.toDataURL('image/jpeg', 0.85);
+          const feat = await featOf(dataUrl);
+          const ds = known.map(([id, f]) => [id, KC.scan.distance(feat, f)]).sort((a, b) => a[1] - b[1]);
+          if (ds.length && ds[0][1] < KC.scan.SAME) {
+            const vid = ds[0][0];
+            if (!entries.some(e => e.vid === vid)) entries.push({ dataUrl: KC.api.img(vid), vid, on: true });
+            continue;
+          }
+          // 台帳にない絵。今回読んだ中に同じ絵があれば1つにする
+          if (entries.some(e => !e.vid && e.feat && KC.scan.distance(feat, e.feat) < KC.scan.SAME)) continue;
+          const near = ds.filter(d => d[1] < KC.scan.NEAR).slice(0, 4).map(d => d[0]);
+          const e = { dataUrl, feat, vid: null, nameCanvas: c.nameCanvas, cand: { vids: near, nos: [] }, sel: null, on: false };
+          entries.push(e);
+          fresh.push(e);
+        }
+        prog(0.1 + 0.6 * (k + 1) / files.length);
+        render();
+      }
+      // 台帳にない絵だけ、名前の文字を読んで種族の候補を出す（ヒント）
+      if (fresh.length) {
+        const texts = await KC.ocr.readAll(fresh.map(e => e.nameCanvas), (i, n) => prog(0.7 + 0.3 * i / n));
+        fresh.forEach((e, i) => {
+          const g = KC.ocr.guessEx(texts[i]);
+          const nearNos = e.cand.vids.map(id => S().variants.get(id)?.no).filter(Boolean);
+          e.cand.nos = [...new Set([...g.ids, ...nearNos])];
+          // 名前がそのまま読めて1つに決まったときだけ、最初から入れておく
+          if (g.sure && !e.sel) { e.sel = { no: g.ids[0] }; e.on = true; }
+        });
+      }
+      prog(1);
+    } catch (err) {
+      U().fail(err);
+    } finally {
+      running = false;
+      $('pick').classList.remove('disabled');
+      render();
+      setTimeout(() => prog(0), 600);
+    }
+  }
+
+  const visible = () => entries.filter(e => !(e.vid && S().owned[who].has(e.vid)));
+  const ready = e => e.on && (e.vid || e.sel);
+  function updateAdd() { U().$('add').disabled = running || !visible().some(ready); }
+
+  function render() {
+    const { $, esc, name, pname, picker } = U();
+    $('who').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.p === who));
+    const list = $('scan-list');
+    let html = '';
+    if (done) {
+      html += `<div class="done"><div class="cnt"><span>${esc(pname(done.who))}</span><b>${done.before} → ${done.after}</b></div>` +
+        `<div class="thumbs">${done.added.map(id => `<span class="th sm"><img data-vid="${esc(id)}" alt=""></span>`).join('')}</div></div>`;
+    }
+    const vis = visible();
+    if (entries.length && !vis.length && !running) html += '<div class="done">増えたキラはありません</div>';
+    html += vis.map((e, i) => `<div class="srow${ready(e) ? '' : ' off'}" data-i="${i}">` +
+      `<input type="checkbox"${e.on ? ' checked' : ''}><span class="th"><img src="${e.dataUrl}" alt=""></span>` +
+      (e.vid ? `<span class="nm">${esc(name(S().variants.get(e.vid).no))}</span>` : '<div class="picker"></div>') + '</div>').join('');
+    list.innerHTML = html;
+    U().fillImages(list);
+    // 台帳にない絵の種族を選ぶ欄
+    list.querySelectorAll('.srow').forEach(row => {
+      const e = vis[+row.dataset.i], host = row.querySelector('.picker');
+      if (!host) return;
+      picker(host, {
+        value: e.sel,
+        cands: () => [...e.cand.vids.map(id => ({ vid: id, no: S().variants.get(id)?.no })).filter(c => c.no), ...e.cand.nos.map(no => ({ no }))],
+        onChange: s => {
+          e.sel = s;
+          e.on = !!s;
+          row.querySelector('input[type=checkbox]').checked = e.on;
+          row.classList.toggle('off', !ready(e));
+          updateAdd();
+        },
+      });
+    });
+    updateAdd();
+  }
+
+  async function add() {
+    const { busy, note, pname } = U();
+    const p = who, rows = visible().filter(ready);
+    if (!rows.length) return;
+    const items = rows.map(e => e.vid ? { vid: e.vid } : e.sel.vid ? { vid: e.sel.vid } : { no: e.sel.no, img: e.dataUrl });
+    const before = S().owned[p].size;
+    await busy(async () => {
+      const r = await KC.api.add(p, items);
+      // 新しく台帳に入った絵は、もらい直さなくていいように覚えておく
+      rows.forEach((e, i) => {
+        if (!e.vid && !e.sel.vid) KC.api.remember(r.ids[i], e.dataUrl);
+        e.vid = r.ids[i];
+        e.dataUrl = KC.api.img(e.vid) || e.dataUrl;
+      });
+      done = { who: p, before, after: S().owned[p].size, added: r.added };
+      U().refresh();
+      note(`${pname(p)}：${before} → ${S().owned[p].size}`, async () => {
+        await KC.api.remove(p, r.added);
+        done = null;
+        U().refresh();
+        note(`${pname(p)}：${S().owned[p].size + r.added.length} → ${S().owned[p].size}`);
+      });
+    });
+  }
+
+  function init() {
+    const { $ } = U();
+    $('who').addEventListener('click', e => {
+      const b = e.target.closest('button[data-p]');
+      if (!b) return;
+      who = b.dataset.p;
+      render();
+    });
+    $('files').addEventListener('change', async () => {
+      const fs = [...$('files').files];
+      $('files').value = '';
+      if (fs.length && !running) { done = null; await read(fs); }
+    });
+    $('add').addEventListener('click', add);
+    $('scan-list').addEventListener('change', e => {
+      if (e.target.type !== 'checkbox') return;
+      const row = e.target.closest('.srow'), ent = visible()[+row.dataset.i];
+      ent.on = e.target.checked;
+      row.classList.toggle('off', !ready(ent));
+      updateAdd();
+    });
+  }
+
+  return { init, render, read, get entries() { return entries; } };
+})();
+
+KC.ui.boot();
+</script>
+</body>
+</html>
