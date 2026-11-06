@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-05T18:01:14.959Z">
+<meta name="kc-build" content="2026-11-06T03:33:29.628Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -152,7 +152,7 @@ input.cos:disabled { opacity: .5; }
 /* 「誰のスクショ？」：右の名前を押すと写真選びが開く */
 .who-q { flex: none; color: var(--sub); white-space: nowrap; }
 .done .cnt b { color: var(--gold); }
-.done { padding: 12px; border-bottom: 1px solid var(--line); }
+.done { padding: 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
 .done .cnt { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
 .done .cnt b { font-size: 18px; }
 .done .thumbs { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -937,12 +937,18 @@ KC.ui = (() => {
     }, { passive: false });
   }
 
+  // タブを切り替える（取り込みの結果から一覧を開くときにも使う）
+  function tab(name) {
+    document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === name));
+    document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'page-' + name));
+  }
   function tabs() {
     $('tabs').addEventListener('click', e => {
       const b = e.target.closest('button[data-tab]');
       if (!b) return;
-      document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
-      document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'page-' + b.dataset.tab));
+      // 一覧のタブを押したら、取り込みの結果だけの表示をやめて元の一覧に戻す
+      if (b.dataset.tab === 'list' && KC.list.only) KC.list.showOnly(null);
+      tab(b.dataset.tab);
     });
   }
 
@@ -1162,7 +1168,7 @@ KC.ui = (() => {
     });
   }
 
-  return { $, esc, name, label, pname, note, fail, busy, fillImages, picker, SYM, gNorm, sexHtml, stepHtml, zoom, applySize, refresh, boot };
+  return { $, esc, name, label, pname, note, fail, busy, fillImages, picker, SYM, gNorm, sexHtml, stepHtml, zoom, applySize, refresh, boot, tab };
 })();
 
 // 一覧の画面（検索もここ。進化の系統ごとに1行・押すと開く）と、絵をたっぷり見る画面（種族を直す・同じ絵をまとめる・写真の選び直し・消す）
@@ -1171,6 +1177,9 @@ KC.list = (() => {
   const U = () => KC.ui;
   const S = () => KC.api.state;
   let filter = 'all';
+  // 取り込みの結果から開いたとき：その取り込みで増えた絵の id だけを1行ずつ出す（系統でまとめない）。
+  // 絞り込みのボタンはどれも点けない。絞り込み・検索・一覧のタブを押すと元の一覧に戻る
+  let only = null;
 
   // 印・数の文字：まだ記入していない ?（数は -1 で表す）・持っていないと記録した 0・持っていれば 1・2・3…
   const mkText = n => n < 0 ? '?' : String(n);
@@ -1208,6 +1217,12 @@ KC.list = (() => {
 
   function render() {
     const { $, esc, fillImages } = U();
+    if (only) {
+      // まとめる・消すで無くなった絵は出さない
+      $('list').innerHTML = only.map(id => S().variants.get(id)).filter(Boolean).sort(KC.api.cmp).map(v => rowHtml(v)).join('');
+      fillImages($('list'));
+      return;
+    }
     const q = $('q').value.trim();
     // 検索は系統ごと引っかける（フシギバナで探すとフシギダネの絵も出る）
     const hits = q ? KC.ocr.search(q, 60) : null;
@@ -1370,10 +1385,11 @@ KC.list = (() => {
 
   function init() {
     const { $, note, label } = U();
-    $('q').addEventListener('input', render);
+    $('q').addEventListener('input', () => { if (only) showOnly(null); else render(); });
     $('filter').addEventListener('click', e => {
       const b = e.target.closest('button[data-f]');
       if (!b) return;
+      only = null;
       filter = b.dataset.f;
       $('filter').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
       render();
@@ -1478,7 +1494,17 @@ KC.list = (() => {
     });
   }
 
-  return { init, render, open };
+  // ids の絵だけを出す（null で元の一覧＝絞り込み「全部」・検索なし）
+  function showOnly(ids) {
+    const { $ } = U();
+    only = ids ? [...ids] : null;
+    filter = 'all';
+    if (only) $('q').value = '';
+    $('filter').querySelectorAll('button').forEach(x => x.classList.toggle('on', !only && x.dataset.f === 'all'));
+    render();
+  }
+
+  return { init, render, open, showOnly, get only() { return only; } };
 })();
 
 // 取り込みの画面：スクショのキラを1匹1行に並べる → 各行で台帳の絵（候補）か新しい絵を選ぶ・スキップ・♂♀ → 追加
@@ -1668,7 +1694,7 @@ KC.scanUi = (() => {
     const list = $('scan-list');
     let html = '';
     if (done) {
-      html += `<div class="done"><div class="cnt"><span class="p${done.who}">${esc(pname(done.who))}</span><b>${done.before} → ${done.after}</b></div>` +
+      html += `<div class="done" title="押すと、この取り込みで増えた絵だけを一覧で見る"><div class="cnt"><span class="p${done.who}">${esc(pname(done.who))}</span><b>${done.before} → ${done.after}</b></div>` +
         `<div class="thumbs">${done.added.map(id => `<span class="th sm"><img data-vid="${esc(id)}" alt=""></span>`).join('')}</div></div>`;
     }
     html += entries.map(rowHtml).join('');
@@ -1732,6 +1758,12 @@ KC.scanUi = (() => {
     $('add').addEventListener('click', add);
     // 行の中：絵を押すと大きく・♂♀・スキップ・候補を選ぶ・新しい絵にする／候補に戻る
     $('scan-list').addEventListener('click', ev => {
+      // 追加の結果（上の欄）：押すと一覧のタブで、この取り込みで増えた絵だけを出す
+      if (done && ev.target.closest('.done')) {
+        KC.list.showOnly(done.added);
+        U().tab('list');
+        return;
+      }
       const row = ev.target.closest('.srow');
       if (!row) return;
       const i = +row.dataset.i, e = entries[i];
