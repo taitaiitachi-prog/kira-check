@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-06T06:44:30.717Z">
+<meta name="kc-build" content="2026-11-06T09:28:17.807Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -201,6 +201,8 @@ input.cos:disabled { opacity: .5; }
 #zoom .sheet-top .pic { width: min(100%, calc((var(--vh, 100vh) - 90px) * 4 / 3)); }.sheet-top .pic img { width: 100%; height: 100%; display: block; transform: scale(1.4); transform-origin: 50% 72%; }
 .sheet .x { position: absolute; right: 6px; top: 4px; width: 44px; height: 44px; border: 0; background: none; color: var(--sub); font-size: 26px; }
 .sh-counts { padding: 8px 0 0; }
+.bar.sh-memo { padding-top: 0; }   /* 上の「種族・衣装・保存」の行とのすき間を、ほかの行の間と同じにする */
+#sh-memo { width: 0; padding: 0 8px; }
 .cnt-row { display: flex; align-items: center; gap: 8px; padding: 4px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cnt-row .grow { overflow: hidden; text-overflow: ellipsis; }   /* 長い名前でもボタンに重ねない */
 /* 大きいとき（2段目から）は2段：上に名前、下に ♂♀・0・数（右寄せ） */
@@ -290,6 +292,8 @@ input.cos:disabled { opacity: .5; }
     <input id="sh-file" type="file" accept="image/*" hidden>
     <div class="sh-counts" id="sh-counts" title="持っている数"></div>
     <div class="bar"><div class="picker grow" id="sh-picker"></div><input class="cos" id="sh-cos" type="text" maxlength="12" placeholder="衣装" autocomplete="off"><button class="btn main" id="sh-save">保存</button></div>
+    <!-- 備考（2人で共有。一覧の検索にも引っかかる。上の「保存」でいっしょに送る） -->
+    <div class="bar sh-memo"><input id="sh-memo" type="text" maxlength="100" placeholder="備考" autocomplete="off"></div>
     <!-- 左下に「消す」（押すと注意の小窓）、その右に「上の絵にまとめる」 -->
     <div class="sh-foot"><button class="btn" id="sh-del" title="この絵を台帳から消す">消す</button><div class="sh-merge grow" id="sh-merge"></div></div>
   </div>
@@ -591,7 +595,7 @@ KC.ocr = (() => {
     return out;
   }
 
-  return { readAll, guess, guessEx, search, norm };
+  return { readAll, guess, guessEx, search, norm, kana };
 })();
 
 // Google 側とのやりとりと、手元に持つデータ（state）。
@@ -652,7 +656,7 @@ KC.api = (() => {
   }
 
   // 一覧・名前・持っている、の中身を1つの文字にする（Google の答えと手元が同じかを比べるため）
-  const sig = () => JSON.stringify([state.people, state.sizes, [...state.variants.values()].map(v => [v.id, v.no, v.cos, v.ord]).sort(),
+  const sig = () => JSON.stringify([state.people, state.sizes, [...state.variants.values()].map(v => [v.id, v.no, v.cos, v.ord, v.memo]).sort(),
     [...state.owned.a].sort(), [...state.owned.b].sort(), [...state.gender.a].sort(), [...state.gender.b].sort()]);
   // Google の {id: 数}（前の版は id の並び）を Map にする
   const toMap = o => Array.isArray(o) ? new Map(o.map(id => [id, 1])) : new Map(Object.entries(o || {}));
@@ -661,8 +665,8 @@ KC.api = (() => {
     const before = sig();
     state.people = m.people;
     state.sizes = (m.sizes || [0, 0]).map(Number);
-    // ord：衣装違いの並び順（前の版の Google には無いので0）
-    state.variants = new Map(m.variants.map(([id, no, cos, ord]) => [id, { id, no, cos: cos || '', ord: ord || 0 }]));
+    // ord：衣装違いの並び順・memo：備考（どちらも前の版の Google には無いので0・空）
+    state.variants = new Map(m.variants.map(([id, no, cos, ord, memo]) => [id, { id, no, cos: cos || '', ord: ord || 0, memo: memo || '' }]));
     state.owned = { a: toMap(m.owned.a), b: toMap(m.owned.b) };
     const g = m.gender || {};   // 前の版の Google には無い
     state.gender = { a: new Map(Object.entries(g.a || {})), b: new Map(Object.entries(g.b || {})) };
@@ -782,7 +786,7 @@ KC.api = (() => {
       else {
         vid = newId();
         const cos = clean(it.cos);
-        state.variants.set(vid, { id: vid, no: it.no, cos, ord: 0 });
+        state.variants.set(vid, { id: vid, no: it.no, cos, ord: 0, memo: '' });
         remember(vid, it.img);
         send.push({ id: vid, no: it.no, img: it.img, cos, n });
       }
@@ -817,12 +821,14 @@ KC.api = (() => {
     push('api_gender', p, vid, g);
   }
   const total = p => [...state.owned[p].values()].reduce((a, b) => a + b, 0);
-  function edit(vid, no, cos) {
+  // 種族・衣装名・備考（100字まで。2人で共有。null ならそのまま）を直す
+  function edit(vid, no, cos, memo) {
     const v = state.variants.get(vid);
     if (!v) return;
     v.no = no;
     v.cos = clean(cos);
-    push('api_edit', vid, no, v.cos);
+    if (memo != null) v.memo = clean(memo, 100);
+    push('api_edit', vid, no, v.cos, v.memo);
   }
   // 衣装違いの並び順（0〜99。同じ種族の中で小さい順）
   function order(vid, k) {
@@ -837,6 +843,9 @@ KC.api = (() => {
   function merge(from, into) {
     // 両方持っていた人は多い方の数（Code.gs と同じ）
     // オスメスは両方の印を合わせる
+    // 備考：まとめ先が空なら、消える絵の備考を移す（Code.gs と同じ）
+    const vf = state.variants.get(from), vi = state.variants.get(into);
+    if (vf && vi && !vi.memo && vf.memo) vi.memo = vf.memo;
     ['a', 'b'].forEach(p => {
       const n = have(p, from);
       if (state.owned[p].delete(from)) state.owned[p].set(into, Math.max(n, have(p, into)));   // 0 匹の記録も移す
@@ -1236,8 +1245,10 @@ KC.list = (() => {
     // 検索は系統ごと引っかける（フシギバナで探すとフシギダネの絵も出る）
     const hits = q ? KC.ocr.search(q, 60) : null;
     const roots = hits && new Set(hits.map(KC.api.root));
+    // 衣装名・備考にも引っかける（ひらがな・カタカナ、英字の大小は区別しない）
+    const fold = s => KC.ocr.kana(s).toLowerCase(), fq = fold(q);
     const keys = [...new Set([...S().variants.values()].sort(KC.api.cmp)
-      .filter(v => !roots || roots.has(KC.api.root(v.no)) || (v.cos && v.cos.includes(q))).map(KC.api.fam))];
+      .filter(v => !roots || roots.has(KC.api.root(v.no)) || fold(v.cos + '\n' + v.memo).includes(fq)).map(KC.api.fam))];
     // 絞り込み「A×」は、その人が系統の中にキラを1匹も持っていないもの（? と 0）
     const groups = keys.map(k => [k, members(k)]).filter(([, vs]) => filter === 'all' || !vs.some(v => KC.api.have(filter, v.id)));
     let html = groups.map(([k, vs]) => vs.length > 1 ? famHtml(k, vs) : rowHtml(vs[0])).join('');
@@ -1386,6 +1397,7 @@ KC.list = (() => {
     paintCounts();
     pick = picker($('sh-picker'), { value: { no: v.no } });
     $('sh-cos').value = v.cos || '';
+    $('sh-memo').value = v.memo || '';
     paintOrd();
     paintFoot();
     $('sheet').hidden = false;
@@ -1463,16 +1475,17 @@ KC.list = (() => {
       const sel = $('sh-merge').querySelector('img.sel');
       const from = sel && sel.dataset.from && S().variants.get(sel.dataset.from);
       const ph = sel && sel.dataset.ph != null ? photos[+sel.dataset.ph] : null;
-      const no = s ? s.no : v && v.no, cos = $('sh-cos').value.trim();
+      const no = s ? s.no : v && v.no, cos = $('sh-cos').value.trim(), memo = $('sh-memo').value.trim();
       close();
       if (!v) return;
-      const edited = no !== v.no || cos !== v.cos;
-      if (!from && !edited && !ph) return;
+      const edited = no !== v.no || cos !== v.cos, memoEd = memo !== v.memo;
+      if (!from && !edited && !memoEd && !ph) return;
       const txt = [from && `${label(from)} → ${label(v)}にまとめました`,
         edited && `${label({ no: v.no, cos: v.cos })} → ${label({ no, cos })}`,
+        memoEd && `${edited ? '' : label(v) + '：'}備考 ${v.memo || '−'}→${memo || '−'}`,
         ph && `${label({ no, cos })}：写真を選び直しました`].filter(Boolean).join('・');
       if (from) KC.api.merge(from.id, vid);
-      if (edited) KC.api.edit(vid, no, cos);
+      if (edited || memoEd) KC.api.edit(vid, no, cos, memoEd ? memo : null);   // 備考を変えていなければそのまま（まとめで移した備考を消さない）
       if (ph) KC.api.photo(vid, ph);
       U().refresh();
       note(txt);
