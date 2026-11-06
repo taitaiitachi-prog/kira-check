@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-06T09:28:17.807Z">
+<meta name="kc-build" content="2026-11-06T13:57:03.950Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -88,7 +88,10 @@ input.size { flex: 1; height: var(--h); padding: 0; border: 0; background: none;
 
 /* 絵の行：絵・名前・2人の印。1行に収める */
 .vhead, .vrow { display: grid; grid-template-columns: calc(var(--thw) + 4px) 1fr var(--mkw) var(--mkw); align-items: center; padding: 0 12px; gap: 4px; }
-.vhead { height: 26px; color: var(--sub); font-size: 12px; border-bottom: 1px solid var(--line); flex: none; }
+.vhead { height: 34px; color: var(--sub); font-size: 12px; border-bottom: 1px solid var(--line); flex: none; }
+/* 見出しの左端（写真の列の上）：並べ方「最近」の切り替え。オンは白で塗る */
+.vhead .tog { width: var(--thw); height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--sub); font-size: 13px; cursor: pointer; white-space: nowrap; }
+.vhead .tog.on { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
 .vhead .mkh { text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vhead .mkh.pa { color: var(--pa); }
 .vhead .mkh.pb { color: var(--pb); }
@@ -104,7 +107,6 @@ input.cos:disabled { opacity: .5; }
 .th { width: var(--thw); height: var(--thh); border-radius: 6px; overflow: hidden; background: #222529; display: block; cursor: pointer; flex: none; }
 .th img { width: 100%; height: 100%; display: block; transform: scale(1.4); transform-origin: 50% 72%; }
 .th.sm { width: var(--smw); height: var(--smh); border-radius: 4px; }
-.vhead .th { visibility: hidden; height: 0; }
 .mk { height: var(--row); border: 0; background: none; font-size: 1.33em; color: var(--off); cursor: pointer; white-space: nowrap; overflow: hidden; padding: 0; }
 .mk.on { font-weight: 700; color: var(--text); }
 .mk:disabled { cursor: default; opacity: .5; }
@@ -243,7 +245,7 @@ input.cos:disabled { opacity: .5; }
         <button data-f="b" class="pb">B×</button>
       </div>
     </div>
-    <div class="vhead"><span class="th"></span><span class="nm"></span><span class="mkh pa">A</span><span class="mkh pb">B</span></div>
+    <div class="vhead"><button class="tog" id="sort" title="最近変えた順に並べる（もう一度押すと図鑑の順）">最近</button><span class="nm"></span><span class="mkh pa">A</span><span class="mkh pb">B</span></div>
     <div class="scroll" id="list"></div>
   </section>
 
@@ -665,8 +667,8 @@ KC.api = (() => {
     const before = sig();
     state.people = m.people;
     state.sizes = (m.sizes || [0, 0]).map(Number);
-    // ord：衣装違いの並び順・memo：備考（どちらも前の版の Google には無いので0・空）
-    state.variants = new Map(m.variants.map(([id, no, cos, ord, memo]) => [id, { id, no, cos: cos || '', ord: ord || 0, memo: memo || '' }]));
+    // ord：衣装違いの並び順・memo：備考・up：最後に変えた日時（ミリ秒。どれも前の版の Google には無いので0・空・0）
+    state.variants = new Map(m.variants.map(([id, no, cos, ord, memo, up]) => [id, { id, no, cos: cos || '', ord: ord || 0, memo: memo || '', up: up || 0 }]));
     state.owned = { a: toMap(m.owned.a), b: toMap(m.owned.b) };
     const g = m.gender || {};   // 前の版の Google には無い
     state.gender = { a: new Map(Object.entries(g.a || {})), b: new Map(Object.entries(g.b || {})) };
@@ -774,6 +776,8 @@ KC.api = (() => {
   // 画面と同じ決まりで文字を整える（Code.gs の kcText_ と同じ）
   const clean = (s, max = 12) => String(s == null ? '' : s).trim().replace(/^[=+\-@]+/, '').slice(0, max);
   const newId = () => 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  // 絵を「今変えた」と記録する（一覧の「最近」の並べ方用。Google 側も同じ操作で記録する。並び順を変えただけでは記録しない）
+  const touch = vid => { const v = state.variants.get(vid); if (v) v.up = Date.now(); };
 
   // items：[{vid, n}]（台帳の絵）か [{no, img, cos, n}]（新しい絵）。n は数えた匹数（今より多いときだけ増やす）
   // 返す値：{ids（items と同じ順）, added（数が増えた絵）}
@@ -786,19 +790,21 @@ KC.api = (() => {
       else {
         vid = newId();
         const cos = clean(it.cos);
-        state.variants.set(vid, { id: vid, no: it.no, cos, ord: 0, memo: '' });
+        state.variants.set(vid, { id: vid, no: it.no, cos, ord: 0, memo: '', up: 0 });
         remember(vid, it.img);
         send.push({ id: vid, no: it.no, img: it.img, cos, n });
       }
       ids.push(vid);
       if (n > (state.owned[p].get(vid) || 0)) { state.owned[p].set(vid, n); if (!added.includes(vid)) added.push(vid); }
     });
+    added.forEach(touch);
     push('api_add', p, send);
     return { ids, added };
   }
   // 持っている数を直す（0 は「キラをまだ持っていない」と記録。負の数で記録を消して「?（まだ記入していない）」に戻す）
   function count(p, vid, n) {
     n = Math.max(-1, n);
+    if (n !== (known(p, vid) ? have(p, vid) : -1)) touch(vid);   // Google 側も数が変わったときだけ記録する
     if (n >= 0) state.owned[p].set(vid, n); else state.owned[p].delete(vid);
     // ♂♀ 両方から1匹に減らしたら、どちらが残ったかわからないので空にする。0 匹なら印も外れる（Code.gs と同じ）
     if (n < minOf(gender(p, vid)) || n < 1) state.gender[p].delete(vid);
@@ -816,6 +822,7 @@ KC.api = (() => {
       if (!g) return;
       count(p, vid, minOf(g));   // 0 匹・未記入でも押せる：先に数（♂か♀で1・両方で2）を送り、Google 側に行を作ってから印を送る
     }
+    if (g !== gender(p, vid)) touch(vid);
     if (g) state.gender[p].set(vid, g); else state.gender[p].delete(vid);
     if (have(p, vid) < minOf(g)) state.owned[p].set(vid, minOf(g));   // Google 側も同じように増やす
     push('api_gender', p, vid, g);
@@ -828,6 +835,7 @@ KC.api = (() => {
     v.no = no;
     v.cos = clean(cos);
     if (memo != null) v.memo = clean(memo, 100);
+    touch(vid);
     push('api_edit', vid, no, v.cos, v.memo);
   }
   // 衣装違いの並び順（0〜99。同じ種族の中で小さい順）
@@ -856,6 +864,7 @@ KC.api = (() => {
     });
     state.variants.delete(from);
     feats.delete(from);
+    touch(into);
     push('api_merge', from, into);
   }
   // 絵を台帳から消す（2人の数・オスメスの記録も）。戻せないので画面で聞いてから呼ぶ
@@ -872,7 +881,7 @@ KC.api = (() => {
     if (!v) return null;
     const nid = newId();
     state.variants.delete(vid);
-    state.variants.set(nid, { ...v, id: nid });
+    state.variants.set(nid, { ...v, id: nid, up: Date.now() });
     ['owned', 'gender'].forEach(k => ['a', 'b'].forEach(p => {
       const m = state[k][p];
       if (m.has(vid)) { m.set(nid, m.get(vid)); m.delete(vid); }
@@ -1198,6 +1207,11 @@ KC.list = (() => {
   // 取り込みの結果から開いたとき：その取り込みで増えた絵の id だけを1行ずつ出す（系統でまとめない）。
   // 絞り込みのボタンはどれも点けない。絞り込み・検索・一覧のタブを押すと元の一覧に戻る
   let only = null;
+  // 並べ方：false＝図鑑の順（api.js の cmp）・true＝最近変えた順（系統の行は中でいちばん新しい絵の日時。開いた中の行は図鑑の順のまま）。端末に覚える
+  const SORT_KEY = 'kc-sort';
+  let recent = false;
+  try { recent = localStorage.getItem(SORT_KEY) === 'up'; } catch { /* 覚えられなければ図鑑の順 */ }
+  const order = () => recent ? (a, b) => b.up - a.up || KC.api.cmp(a, b) : KC.api.cmp;
 
   // 印・数の文字：まだ記入していない ?（数は -1 で表す）・持っていないと記録した 0・持っていれば 1・2・3…
   const mkText = n => n < 0 ? '?' : String(n);
@@ -1237,7 +1251,7 @@ KC.list = (() => {
     const { $, esc, fillImages } = U();
     if (only) {
       // まとめる・消すで無くなった絵は出さない
-      $('list').innerHTML = only.map(id => S().variants.get(id)).filter(Boolean).sort(KC.api.cmp).map(v => rowHtml(v)).join('');
+      $('list').innerHTML = only.map(id => S().variants.get(id)).filter(Boolean).sort(order()).map(v => rowHtml(v)).join('');
       fillImages($('list'));
       return;
     }
@@ -1247,7 +1261,8 @@ KC.list = (() => {
     const roots = hits && new Set(hits.map(KC.api.root));
     // 衣装名・備考にも引っかける（ひらがな・カタカナ、英字の大小は区別しない）
     const fold = s => KC.ocr.kana(s).toLowerCase(), fq = fold(q);
-    const keys = [...new Set([...S().variants.values()].sort(KC.api.cmp)
+    // 系統の並びは、並べ方で先に来る絵の位置（最近の順なら系統の中でいちばん新しい絵）
+    const keys = [...new Set([...S().variants.values()].sort(order())
       .filter(v => !roots || roots.has(KC.api.root(v.no)) || fold(v.cos + '\n' + v.memo).includes(fq)).map(KC.api.fam))];
     // 絞り込み「A×」は、その人が系統の中にキラを1匹も持っていないもの（? と 0）
     const groups = keys.map(k => [k, members(k)]).filter(([, vs]) => filter === 'all' || !vs.some(v => KC.api.have(filter, v.id)));
@@ -1454,6 +1469,16 @@ KC.list = (() => {
       filter = b.dataset.f;
       $('filter').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
       render();
+    });
+    // 並べ方の切り替え（押すたびに 最近変えた順 ⇔ 図鑑の順。点いているときは白く塗る）
+    const paintSort = () => $('sort').classList.toggle('on', recent);
+    paintSort();
+    $('sort').addEventListener('click', () => {
+      recent = !recent;
+      try { localStorage.setItem(SORT_KEY, recent ? 'up' : 'no'); } catch { /* その場だけ */ }
+      paintSort();
+      render();
+      $('list').scrollTop = 0;
     });
     $('list').addEventListener('click', e => {
       // 系統の行：どこを押しても開く・閉じる（数は中の絵の行で変える）
