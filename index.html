@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-06T03:33:29.628Z">
+<meta name="kc-build" content="2026-11-06T05:01:23.807Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -118,7 +118,11 @@ input.cos:disabled { opacity: .5; }
 
 /* 取り込みの行（1匹1行）：上の段に絵・ニックネームの写真・♂♀・スキップ、下の段に候補の絵（か新しい絵の種族と衣装） */
 .srow { display: grid; grid-template-columns: var(--thw) minmax(0, 1fr) auto auto; grid-template-rows: var(--h) var(--h); align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.srow { position: relative; touch-action: pan-y; }
 .srow .th { grid-row: 1 / 3; }
+/* 左へスワイプしたとき行の右から出る「取り込まない」（離せば消える所まで来たら白く塗る） */
+.swipe-l { position: absolute; left: 100%; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; white-space: nowrap; background: var(--panel); color: var(--sub); }
+.swipe-l.on { background: var(--text); color: var(--bg); font-weight: 600; }
 .srow .nick { min-width: 0; height: var(--h); display: flex; align-items: center; overflow: hidden; }
 .srow .nick img { max-width: 100%; max-height: 100%; display: block; border-radius: 4px; }
 .skip-b { height: var(--h); padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--sub); white-space: nowrap; cursor: pointer; }
@@ -1519,7 +1523,7 @@ KC.scanUi = (() => {
   try { if (localStorage.getItem('kc-who') === 'b') who = 'b'; } catch { /* 覚えられなければ1人目 */ }
   // 1匹1行：{dataUrl（絵）, feat, nameUrl（ニックネームの所の写真）, nameCanvas, shot（何枚目のスクショ）,
   //   cands:[{vid}|{ref:前の行}]（似ている順）, nos:[種族の候補], sel:{vid}|{no}|{ref}|null, cos, mode:'cands'|'new',
-  //   skip, touched（スキップを自分で押した）, g（'m'|'f'|'mf'|''）}
+  //   skip, touched（スキップを自分で押した）, gone（左へスワイプして消した）, g（'m'|'f'|'mf'|''）}
   // ref：今回読んだ前の行の「新しい絵」と同じ絵、の意味
   let entries = [];
   let done = null;    // 最後の追加：{who, before, after, added}（before・after は全部で何匹）
@@ -1644,6 +1648,7 @@ KC.scanUi = (() => {
     }).join('') + '<button class="tile new" data-new>新しい絵</button>';
   }
   function rowHtml(e, i) {
+    if (e.gone) return '';   // 左へスワイプして「取り込まない」にした行は出さない
     const { sexHtml } = U();
     const pick = e.mode === 'new'
       ? `${e.cands.length ? '<button class="back" title="候補から選ぶ">‹</button>' : ''}<div class="picker"></div><input class="cos" type="text" maxlength="12" placeholder="衣装" autocomplete="off">`
@@ -1738,6 +1743,58 @@ KC.scanUi = (() => {
     note(`${pname(p)}：${before} → ${done.after}匹`);
   }
 
+  // 行を左へスワイプ：右から「取り込まない」が出て、行の幅の 1/4 より先で離すとその行を一覧から消す
+  //（スキップと同じ扱いで、次の追加のときに捨てる）。候補の並び（横に動かす所）と入力欄から始めたときは何もしない
+  function swipe(list) {
+    let sw = null, eat = 0;
+    const reset = () => {
+      if (!sw) return;
+      const { row, lab } = sw;
+      sw = null;
+      if (!lab) return;
+      row.style.transition = 'transform .15s';
+      row.style.transform = '';
+      setTimeout(() => { row.style.transition = ''; lab.remove(); }, 150);
+    };
+    list.addEventListener('pointerdown', ev => {
+      const row = ev.target.closest('.srow');
+      if (running || ev.button > 0 || !row || ev.target.closest('.pick, input')) return;
+      sw = { row, id: ev.pointerId, x: ev.clientX, y: ev.clientY, dx: 0, lab: null };
+    });
+    list.addEventListener('pointermove', ev => {
+      if (!sw || ev.pointerId !== sw.id) return;
+      const dx = ev.clientX - sw.x, dy = ev.clientY - sw.y;
+      if (!sw.lab) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) { sw = null; return; }   // 縦に動かした＝一覧を動かす
+        if (dx > -10) return;
+        sw.lab = document.createElement('span');
+        sw.lab.className = 'swipe-l';
+        sw.lab.textContent = '取り込まない';
+        sw.row.append(sw.lab);
+        try { sw.row.setPointerCapture(sw.id); } catch { /* 指が外へ出ても続けて受ける（できなければそのまま） */ }
+      }
+      sw.dx = Math.min(0, dx);
+      sw.row.style.transform = `translateX(${sw.dx}px)`;
+      // 文字の欄はずらした幅だけ（一覧の右へはみ出さない）。離せば消える所まで来たら白く塗る
+      sw.lab.style.width = -sw.dx + 'px';
+      sw.lab.classList.toggle('on', -sw.dx > sw.row.offsetWidth / 4);
+    });
+    list.addEventListener('pointerup', ev => {
+      if (!sw || ev.pointerId !== sw.id) return;
+      if (!sw.lab) { sw = null; return; }
+      eat = Date.now() + 400;   // ずらしたあとの click（絵を大きく見るなど）は受けない
+      const { row, dx } = sw;
+      if (-dx <= row.offsetWidth / 4) { reset(); return; }
+      sw = null;
+      const e = entries[+row.dataset.i];
+      if (e) { e.gone = e.skip = e.touched = true; }
+      row.remove();
+      updateAdd();
+    });
+    list.addEventListener('pointercancel', reset);
+    list.addEventListener('click', ev => { if (Date.now() < eat) { ev.stopImmediatePropagation(); ev.preventDefault(); } }, true);
+  }
+
   function init() {
     const { $ } = U();
     // 名前を押す ＝ その人のスクショを選ぶ（すぐ写真選びを開く）
@@ -1756,6 +1813,7 @@ KC.scanUi = (() => {
       if (fs.length && !running) await read(fs);
     });
     $('add').addEventListener('click', add);
+    swipe($('scan-list'));
     // 行の中：絵を押すと大きく・♂♀・スキップ・候補を選ぶ・新しい絵にする／候補に戻る
     $('scan-list').addEventListener('click', ev => {
       // 追加の結果（上の欄）：押すと一覧のタブで、この取り込みで増えた絵だけを出す
