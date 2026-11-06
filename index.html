@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-06T06:24:32.662Z">
+<meta name="kc-build" content="2026-11-06T06:44:30.717Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -181,13 +181,13 @@ input.cos:disabled { opacity: .5; }
 
 .sheet { position: fixed; left: 0; right: 0; top: 0; height: var(--vh, 100%); background: rgba(0,0,0,.6); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
 .sheet[hidden] { display: none; }
-.sheet-in { width: 100%; max-width: 560px; max-height: 100%; overflow-y: auto; background: var(--bg); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; padding-bottom: 16px; }
+.sheet-in { width: 100%; max-width: 560px; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; background: var(--bg); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; padding-bottom: 16px; }
 /* 絵は幅いっぱいに大きく（衣装の違いを見るため）。× は絵に重ねず上に置く */
 /* 上の余白は並び順の −／＋ が入る高さ（標準の大きさでは 48px） */
 .sheet-top { display: flex; justify-content: center; position: relative; padding: calc(var(--h) + 8px) 12px 0; }
 #zoom .sheet-top { padding-top: 48px; }
 #sheet .x { top: calc(4px + (var(--h) - 44px) / 2); }   /* × は並び順の −／＋ と高さの真ん中をそろえる */
-/* 左上：消す・並び順の −／＋ */
+/* 左上：並び順の −／＋ */
 .sh-tl { position: absolute; left: 12px; top: 4px; display: inline-flex; align-items: center; gap: 12px; }
 .sh-ord { display: inline-flex; align-items: center; gap: 6px; }
 .sh-ord small { color: var(--sub); font-size: .85em; }
@@ -207,7 +207,9 @@ input.cos:disabled { opacity: .5; }
 :root[data-big] .cnt-row { flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; }
 :root[data-big] .cnt-row .grow { flex-basis: 100%; }
 /* まとめる候補は1行に並べ、多ければ横に動かす（折り返さない） */
-.sh-foot { display: flex; align-items: center; gap: 8px; padding-right: 12px; }
+/* 左下に「消す」（縮めない）、その右にまとめる候補 */
+.sh-foot { display: flex; align-items: center; padding: 0 12px; }
+#sh-del { flex: none; }
 /* 消す前の注意：画面の真ん中に小さく出す（大きく見る画面より上） */
 .sheet.ask { z-index: 40; align-items: center; }
 .ask-in { width: calc(100% - 32px); max-width: 420px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; }
@@ -283,13 +285,13 @@ input.cos:disabled { opacity: .5; }
 <!-- 絵をたっぷり見る・種族を直す・まとめる -->
 <div class="sheet" id="sheet" hidden>
   <div class="sheet-in">
-    <!-- 左上にこの絵の並び順（同じ種族の衣装違いの中で）、右上に閉じる -->
-    <div class="sheet-top"><span class="sh-tl"><button class="btn" id="sh-del" title="この絵を台帳から消す">消す</button><span class="sh-ord" id="sh-ord" title="並び順：同じ種族の衣装違いは、一覧で小さい順に並ぶ"></span></span><span class="pic" id="sh-pic" title="押すと、スクショから写真を選び直す"><img id="sh-img" alt=""></span><button class="x" id="sh-close" title="閉じる">×</button></div>
+    <!-- 左上にこの絵の並び順（同じ種族の衣装違いの中で）、右上に閉じる。下へスワイプしても閉じる -->
+    <div class="sheet-top"><span class="sh-tl"><span class="sh-ord" id="sh-ord" title="並び順：同じ種族の衣装違いは、一覧で小さい順に並ぶ"></span></span><span class="pic" id="sh-pic" title="押すと、スクショから写真を選び直す"><img id="sh-img" alt=""></span><button class="x" id="sh-close" title="閉じる">×</button></div>
     <input id="sh-file" type="file" accept="image/*" hidden>
     <div class="sh-counts" id="sh-counts" title="持っている数"></div>
     <div class="bar"><div class="picker grow" id="sh-picker"></div><input class="cos" id="sh-cos" type="text" maxlength="12" placeholder="衣装" autocomplete="off"><button class="btn main" id="sh-save">保存</button></div>
-    <!-- 左に「同じ絵としてまとめる」、右端に「消す」（押すと注意の小窓） -->
-    <div class="sh-foot"><div class="sh-merge grow" id="sh-merge"></div></div>
+    <!-- 左下に「消す」（押すと注意の小窓）、その右に「上の絵にまとめる」 -->
+    <div class="sh-foot"><button class="btn" id="sh-del" title="この絵を台帳から消す">消す</button><div class="sh-merge grow" id="sh-merge"></div></div>
   </div>
 </div>
 
@@ -1390,6 +1392,46 @@ KC.list = (() => {
   }
   const close = () => { U().$('sheet').hidden = true; cur = null; photos = null; };
 
+  // 下へスワイプで閉じる（一覧に戻る）：画面が指について下がり、高さの 1/4 より下で離すと閉じる。短いと元に戻る
+  // 中を上まで動かしてあるときだけ（途中なら中を動かす）。入力欄・種族の欄・横に動かす候補の並びから始めたときは何もしない
+  // iPhone でも効くよう、ブラウザの動かし（バウンド）を止められる touch で受ける
+  function swipeDown(inn) {
+    let dn = null, eat = 0;
+    inn.addEventListener('touchstart', ev => {
+      dn = null;
+      if (ev.touches.length !== 1 || inn.scrollTop > 0 || ev.target.closest('input, .picker, .sh-merge')) return;
+      const t = ev.touches[0];
+      dn = { x: t.clientX, y: t.clientY, dy: 0, on: false };
+    }, { passive: true });
+    inn.addEventListener('touchmove', ev => {
+      if (!dn) return;
+      if (ev.touches.length !== 1) { end(); return; }   // 2本目の指が来たらやめる
+      const t = ev.touches[0], dx = t.clientX - dn.x, dy = t.clientY - dn.y;
+      if (!dn.on) {
+        if (dy < 0 || Math.abs(dx) > dy) { if (Math.abs(dx) > 10 || dy < -10) dn = null; return; }   // 上や横＝ここでは何もしない
+        if (ev.cancelable) ev.preventDefault();
+        if (dy <= 10) return;
+        dn.on = true;
+      }
+      if (ev.cancelable) ev.preventDefault();
+      dn.dy = Math.max(0, dy);
+      inn.style.transform = `translateY(${dn.dy}px)`;
+    }, { passive: false });
+    const end = () => {
+      const d = dn;
+      dn = null;
+      if (!d || !d.on) return;
+      eat = Date.now() + 400;   // 動かしたあとの click（写真を押す＝選び直しなど）は受けない
+      if (d.dy > inn.offsetHeight / 4) { inn.style.transform = ''; close(); return; }
+      inn.style.transition = 'transform .15s';
+      inn.style.transform = '';
+      setTimeout(() => { inn.style.transition = ''; }, 150);
+    };
+    inn.addEventListener('touchend', end);
+    inn.addEventListener('touchcancel', end);
+    inn.addEventListener('click', ev => { if (Date.now() < eat) { ev.stopImmediatePropagation(); ev.preventDefault(); } }, true);
+  }
+
   function init() {
     const { $, note, label } = U();
     $('q').addEventListener('input', () => { if (only) showOnly(null); else render(); });
@@ -1413,6 +1455,7 @@ KC.list = (() => {
     });
     $('sh-close').addEventListener('click', close);
     $('sheet').addEventListener('click', e => { if (e.target === $('sheet')) close(); });
+    swipeDown($('sheet').querySelector('.sheet-in'));
     $('sh-save').addEventListener('click', () => {
       const vid = cur, s = pick && pick.get(), v = S().variants.get(vid);
       // まとめる：大きく見ている絵を残し、下で選んだ小さい絵をそこへまとめる
