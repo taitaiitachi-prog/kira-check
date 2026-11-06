@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="kc-build" content="2026-11-06T05:01:23.807Z">
+<meta name="kc-build" content="2026-11-06T06:24:32.662Z">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>kira-check</title>
 <style>
@@ -806,7 +806,10 @@ KC.api = (() => {
   // オスメスの印から決まる最低の数（♂♀ 両方なら2匹はいる。印が無ければ0もある。Code.gs の kcMin_ と同じ）
   const minOf = g => g === 'mf' ? 2 : g ? 1 : 0;
   function setGender(p, vid, g) {
-    if (!have(p, vid)) return;
+    if (!have(p, vid)) {
+      if (!g) return;
+      count(p, vid, minOf(g));   // 0 匹・未記入でも押せる：先に数（♂か♀で1・両方で2）を送り、Google 側に行を作ってから印を送る
+    }
     if (g) state.gender[p].set(vid, g); else state.gender[p].delete(vid);
     if (have(p, vid) < minOf(g)) state.owned[p].set(vid, minOf(g));   // Google 側も同じように増やす
     push('api_gender', p, vid, g);
@@ -1291,18 +1294,18 @@ KC.list = (() => {
   // 印のタップ：押すたびに1匹増える（?→1→2→3…。0 からも 1）。減らすのは大きく見る画面の −
   const tapMark = (vid, p) => setCount(vid, p, KC.api.have(p, vid) + 1);
 
-  // オスメスの印を切り替える（もう一度押すと外れる。持っていない人は押せない）
+  // オスメスの印を切り替える（もう一度押すと外れる）。数が足りなければ増やす（♂か♀で1匹・両方で2匹。?・0 からも押せる）
   function toggleGender(vid, p, x) {
     const { note, label, pname } = U();
     const v = S().variants.get(vid), before = KC.api.gender(p, vid);
-    if (!v || !KC.api.have(p, vid)) return;
-    const g = U().gNorm(before.includes(x) ? before.replace(x, '') : before + x), n0 = KC.api.have(p, vid);
+    if (!v) return;
+    const g = U().gNorm(before.includes(x) ? before.replace(x, '') : before + x), n0 = cntOf(p, vid);
     KC.api.setGender(p, vid, g);
     paintRow(vid);
     if (cur === vid) paintCounts();
-    // ♂♀ 両方にすると2匹以上になるので、数が変わったらそれも出す
-    const n = KC.api.have(p, vid);
-    note(`${pname(p)}：${label(v)} ${gText(before)}→${gText(g)}${n !== n0 ? `・${n0}→${n}` : ''}`);
+    // 数が変わったらそれも出す
+    const n = cntOf(p, vid);
+    note(`${pname(p)}：${label(v)} ${gText(before)}→${gText(g)}${n !== n0 ? `・${mkText(n0)}→${mkText(n)}` : ''}`);
   }
 
   // 絵をたっぷり見る画面：2人ごとに名前・オスメス・0（持っていない）・数の −／＋
@@ -1313,7 +1316,7 @@ KC.list = (() => {
     $('sh-counts').innerHTML = ['a', 'b'].map(p => {
       const n = cntOf(p, cur), h = Math.max(0, n);
       const zero = `<span class="sex"><button data-z="1"${n === 0 ? ' class="on"' : ''} title="キラをまだ持っていない（もう一度押すと ? に戻る）">0</button></span>`;
-      return `<div class="cnt-row" data-p="${p}"><span class="p${p} grow">${esc(pname(p))}</span><span class="sex">${sexHtml(KC.api.gender(p, cur), !h)}</span>${zero}${stepHtml(h, '', mkText(n))}</div>`;
+      return `<div class="cnt-row" data-p="${p}"><span class="p${p} grow">${esc(pname(p))}</span><span class="sex">${sexHtml(KC.api.gender(p, cur))}</span>${zero}${stepHtml(h, '', mkText(n))}</div>`;
     }).join('');
   }
   // 衣装違いの並び順（写真の左上）。−／＋ のほか、真ん中の数字は打ち込める（0〜99）
